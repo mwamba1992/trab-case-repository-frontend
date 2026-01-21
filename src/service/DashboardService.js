@@ -365,6 +365,70 @@ class DashboardService {
     }
 
     /**
+     * Get cases grouped by tax type
+     * This data comes from the stats endpoint or aggregated from actual cases
+     */
+    async getCasesByType() {
+        try {
+            const response = await axios.get(`${API_URL}/stats`);
+            const data = response.data;
+
+            // Extract type counts from stats response
+            if (data.casesByType) {
+                return data.casesByType;
+            }
+
+            // If not in stats, aggregate from actual cases
+            const typeData = await this.aggregateCasesByType();
+
+            // Only use mock data if aggregation also fails or returns no data
+            const hasData = Object.values(typeData).some(count => count > 0);
+            if (!hasData) {
+                return this.getMockDashboardData().casesByType;
+            }
+
+            return typeData;
+        } catch (error) {
+            console.error('Error fetching cases by type:', error);
+            return this.getMockDashboardData().casesByType;
+        }
+    }
+
+    /**
+     * Aggregate case types from actual case data
+     */
+    async aggregateCasesByType() {
+        try {
+            const response = await axios.get(API_URL, {
+                params: { limit: 1000 }
+            });
+
+            const cases = response.data.cases || response.data;
+            if (!Array.isArray(cases)) {
+                return {};
+            }
+
+            const types = {};
+
+            cases.forEach(caseItem => {
+                // Try caseType field first, then taxType, fallback to 'Other'
+                const caseType = caseItem.caseType || caseItem.taxType || 'Other';
+
+                if (types[caseType]) {
+                    types[caseType]++;
+                } else {
+                    types[caseType] = 1;
+                }
+            });
+
+            return types;
+        } catch (error) {
+            console.error('Error aggregating cases by type:', error);
+            return {};
+        }
+    }
+
+    /**
      * Get all cases with pagination
      * Uses /api/v1/cases
      */
