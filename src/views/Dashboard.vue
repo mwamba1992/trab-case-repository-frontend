@@ -1,217 +1,520 @@
 <script setup>
-import { useLayout } from '@/layout/composables/layout';
-import { ProductService } from '@/service/ProductService';
-import { onMounted, ref, watch } from 'vue';
-import { AppealService } from '@/service/AppealService';
+import { onMounted, ref } from 'vue';
+import DashboardService from '@/service/DashboardService';
+import Chart from 'primevue/chart';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import Tag from 'primevue/tag';
 
-const { getPrimary, getSurface, isDarkTheme } = useLayout();
+// Dashboard data
+const dashboardStats = ref(null);
+const casesByJudge = ref([]);
+const casesByStatus = ref(null);
+const casesByOutcome = ref(null);
+const recentDecisions = ref([]);
 
-const products = ref(null);
-const chartData = ref(null);
-const chartOptions = ref(null);
-const topAppellants = ref(null);
-const cardDetails = ref(null);
+// Chart data
+const statusChartData = ref(null);
+const outcomeChartData = ref(null);
+const trendsChartData = ref(null);
+const typeChartData = ref(null);
 
-const filledAppealsCount = ref(0);
-const pendingAppealsCount = ref(0);
-const resolvedAppealsCount = ref(0);
-const filledApplicationCount = ref(0);
-
-const items = ref([
-    { label: 'Add New', icon: 'pi pi-fw pi-plus' },
-    { label: 'Remove', icon: 'pi pi-fw pi-trash' }
-]);
+// Loading state
+const loading = ref(true);
 
 onMounted(async () => {
-    ProductService.getProductsSmall().then((data) => (products.value = data));
-    chartData.value = await setChartData();
-    chartOptions.value = setChartOptions();
-    await AppealService.getTopAppellants().then((data) => (topAppellants.value = data));
-    await AppealService.getCardStatistics().then((data) => (cardDetails.value = data));
-
-    filledApplicationCount.value = cardDetails.value[3];
-    filledAppealsCount.value = cardDetails.value[0];
-    pendingAppealsCount.value = cardDetails.value[1];
-    resolvedAppealsCount.value = cardDetails.value[2];
+    await loadDashboardData();
 });
 
-async function setChartData() {
-    const summary = await AppealService.getAppealsSummary();
-    const documentStyle = getComputedStyle(document.documentElement);
+async function loadDashboardData() {
+    loading.value = true;
+    try {
+        // Fetch all dashboard data
+        dashboardStats.value = await DashboardService.getDashboardStats();
+        casesByJudge.value = await DashboardService.getCasesByJudge();
+        casesByStatus.value = await DashboardService.getCasesByStatus();
+        casesByOutcome.value = await DashboardService.getCasesByOutcome();
+        recentDecisions.value = await DashboardService.getRecentDecisions();
 
-    // Accessing PENDING data
-    const pendingData = summary.find((item) => item.PENDING)?.PENDING;
-    const newData = summary.find((item) => item.NEW)?.NEW;
-    const decidedData = summary.find((item) => item.DECIDED)?.DECIDED;
+        // Setup charts
+        setupStatusChart();
+        setupOutcomeChart();
+        setupTrendsChart();
+        setupTypeChart();
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    } finally {
+        loading.value = false;
+    }
+}
 
-    return {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+function setupStatusChart() {
+    statusChartData.value = {
+        labels: ['Pending', 'Decided', 'Appealed', 'Withdrawn', 'Settled'],
         datasets: [
             {
-                type: 'bar',
-                label: 'Pending',
-                backgroundColor: documentStyle.getPropertyValue('100'),
-                data: pendingData,
-                barThickness: 32
-            },
-            {
-                type: 'bar',
-                label: 'New',
-                backgroundColor: documentStyle.getPropertyValue('--p-primary-300'),
-                data: newData,
-                barThickness: 32
-            },
-            {
-                type: 'bar',
-                label: 'Decided',
-                backgroundColor: documentStyle.getPropertyValue('--p-primary-200'),
-                data: decidedData,
-                borderRadius: {
-                    topLeft: 8,
-                    topRight: 8
-                },
-                borderSkipped: true,
-                barThickness: 32
+                data: [
+                    casesByStatus.value.pending,
+                    casesByStatus.value.decided,
+                    casesByStatus.value.appealed,
+                    casesByStatus.value.withdrawn,
+                    casesByStatus.value.settled
+                ],
+                backgroundColor: ['#F59E0B', '#10B981', '#6366F1', '#64748B', '#8B5CF6'],
+                hoverBackgroundColor: ['#FBBF24', '#34D399', '#818CF8', '#94A3B8', '#A78BFA']
             }
         ]
     };
 }
 
-function setChartOptions() {
-    const documentStyle = getComputedStyle(document.documentElement);
-    const borderColor = documentStyle.getPropertyValue('--surface-border');
-    const textMutedColor = documentStyle.getPropertyValue('--text-color-secondary');
-
-    return {
-        maintainAspectRatio: false,
-        aspectRatio: 0.8,
-        scales: {
-            x: {
-                stacked: true,
-                ticks: {
-                    color: textMutedColor
-                },
-                grid: {
-                    color: 'transparent',
-                    borderColor: 'transparent'
-                }
-            },
-            y: {
-                stacked: true,
-                ticks: {
-                    color: textMutedColor
-                },
-                grid: {
-                    color: borderColor,
-                    borderColor: 'transparent',
-                    drawTicks: false
-                }
+function setupOutcomeChart() {
+    outcomeChartData.value = {
+        labels: ['Allowed', 'Dismissed', 'Partially Allowed', 'Remanded'],
+        datasets: [
+            {
+                label: 'Number of Cases',
+                data: [
+                    casesByOutcome.value.allowed,
+                    casesByOutcome.value.dismissed,
+                    casesByOutcome.value.partially_allowed,
+                    casesByOutcome.value.remanded
+                ],
+                backgroundColor: '#1B365D',
+                borderColor: '#1B365D',
+                borderWidth: 1,
+                barThickness: 80,
+                maxBarThickness: 100,
+                borderRadius: 2
             }
-        }
+        ]
     };
 }
 
-const formatCurrency = (value) => {
-    return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+function setupTrendsChart() {
+    trendsChartData.value = {
+        labels: dashboardStats.value.monthlyTrends.labels,
+        datasets: [
+            {
+                label: 'Filed',
+                data: dashboardStats.value.monthlyTrends.filed,
+                borderColor: '#1B365D',
+                backgroundColor: 'rgba(27, 54, 93, 0.1)',
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: 'Decided',
+                data: dashboardStats.value.monthlyTrends.decided,
+                borderColor: '#10B981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: 'Pending',
+                data: dashboardStats.value.monthlyTrends.pending,
+                borderColor: '#F59E0B',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: true
+            }
+        ]
+    };
+}
+
+function setupTypeChart() {
+    const types = Object.keys(dashboardStats.value.casesByType);
+    const values = Object.values(dashboardStats.value.casesByType);
+
+    typeChartData.value = {
+        labels: types,
+        datasets: [
+            {
+                data: values,
+                backgroundColor: ['#1B365D', '#2A4A7C', '#3B5F9E', '#4C74B7', '#5D89D0'],
+                hoverBackgroundColor: ['#2A4A7C', '#3B5F9E', '#4C74B7', '#5D89D0', '#6E9EE9']
+            }
+        ]
+    };
+}
+
+const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            position: 'bottom',
+            labels: {
+                color: '#1B365D',
+                font: {
+                    size: 13,
+                    weight: 600
+                },
+                padding: 10,
+                boxWidth: 16
+            }
+        }
+    }
 };
 
-watch([getPrimary, getSurface, isDarkTheme], () => {
-    chartData.value = setChartData();
-    chartOptions.value = setChartOptions();
-});
+const barChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            display: true,
+            position: 'top',
+            labels: {
+                color: '#1B365D',
+                font: {
+                    size: 13,
+                    weight: 600
+                },
+                padding: 8,
+                boxWidth: 15
+            }
+        }
+    },
+    scales: {
+        y: {
+            beginAtZero: true,
+            ticks: {
+                color: '#64748B',
+                font: {
+                    size: 12
+                }
+            },
+            grid: {
+                color: '#E2E8F0'
+            }
+        },
+        x: {
+            ticks: {
+                color: '#64748B',
+                font: {
+                    size: 11,
+                    weight: 600
+                }
+            },
+            grid: {
+                display: false
+            }
+        }
+    }
+};
+
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-TZ', {
+        style: 'currency',
+        currency: 'TZS',
+        minimumFractionDigits: 0
+    }).format(value);
+};
+
+const formatPercentage = (value) => {
+    return `${(value * 100).toFixed(1)}%`;
+};
+
+const getOutcomeSeverity = (outcome) => {
+    const severityMap = {
+        allowed: 'success',
+        dismissed: 'danger',
+        partially_allowed: 'warn',
+        remanded: 'info'
+    };
+    return severityMap[outcome] || 'info';
+};
 </script>
 
 <template>
-    <div class="grid grid-cols-12 gap-8">
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4">Filled Appeals</span>
-                        <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ filledAppealsCount }}</div>
-                    </div>
-                    <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
-                        <i class="pi pi-box text-blue-500 !text-xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4">Filled Applications</span>
-                        <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ filledApplicationCount }}</div>
-                    </div>
-                    <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
-                        <i class="pi pi-folder text-orange-500 !text-xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4">Determined Appeals</span>
-                        <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ resolvedAppealsCount }}</div>
-                    </div>
-                    <div class="flex items-center justify-center bg-cyan-100 dark:bg-cyan-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
-                        <i class="pi pi-check-circle text-cyan-500 !text-xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4">Pending Judgement</span>
-                        <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ pendingAppealsCount }}</div>
-                    </div>
-                    <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
-                        <i class="pi pi-minus-circle text-purple-500 !text-xl"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="dashboard-container">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900">TRAB Case Repository Dashboard</h1>
+            <p class="text-gray-600 mt-2">Overview of case statistics and performance metrics</p>
         </div>
 
-        <div class="col-span-12 xl:col-span-6">
-            <div class="card">
-                <div class="font-semibold text-xl mb-4">Up Coming Hearings</div>
-                <DataTable :value="products" :rows="5" :paginator="true" responsiveLayout="scroll">
-                    <Column style="width: 15%" header="CASE">
+        <!-- Loading State -->
+        <div v-if="loading" class="text-center py-12">
+            <i class="pi pi-spin pi-spinner text-4xl text-gray-400"></i>
+            <p class="mt-4 text-gray-600">Loading dashboard data...</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div v-else>
+            <!-- Top Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <!-- Total Cases -->
+                <div class="stat-card">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-label">Total Cases</p>
+                            <h3 class="stat-value">{{ dashboardStats.totalCases.toLocaleString() }}</h3>
+                        </div>
+                        <div class="stat-icon bg-blue-100">
+                            <i class="pi pi-folder text-blue-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pending Cases -->
+                <div class="stat-card">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-label">Pending Cases</p>
+                            <h3 class="stat-value">{{ dashboardStats.pendingCases.toLocaleString() }}</h3>
+                        </div>
+                        <div class="stat-icon bg-orange-100">
+                            <i class="pi pi-clock text-orange-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decided Cases -->
+                <div class="stat-card">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-label">Decided Cases</p>
+                            <h3 class="stat-value">{{ dashboardStats.decidedCases.toLocaleString() }}</h3>
+                        </div>
+                        <div class="stat-icon bg-green-100">
+                            <i class="pi pi-check-circle text-green-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Avg Resolution Days -->
+                <div class="stat-card">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="stat-label">Avg Resolution</p>
+                            <h3 class="stat-value">{{ dashboardStats.averageResolutionDays }} <span class="text-base text-gray-500">days</span></h3>
+                        </div>
+                        <div class="stat-icon bg-purple-100">
+                            <i class="pi pi-calendar text-purple-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Cases by Status -->
+                <div class="card">
+                    <h3 class="card-title mb-4">Cases by Status</h3>
+                    <div style="height: 320px; width: 100%;">
+                        <Chart type="pie" :data="statusChartData" :options="pieChartOptions" />
+                    </div>
+                </div>
+
+                <!-- Cases by Outcome -->
+                <div class="card" style="min-height: 400px;">
+                    <h3 class="card-title mb-4">Cases by Outcome</h3>
+                    <div style="height: 320px; width: 100%; position: relative;">
+                        <Chart type="bar" :data="outcomeChartData" :options="barChartOptions" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row 2 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Cases by Type -->
+                <div class="card">
+                    <h3 class="card-title mb-4">Cases by Tax Type</h3>
+                    <div style="height: 320px; width: 100%;">
+                        <Chart type="doughnut" :data="typeChartData" :options="pieChartOptions" />
+                    </div>
+                </div>
+
+                <!-- Monthly Trends -->
+                <div class="card" style="min-height: 400px;">
+                    <h3 class="card-title mb-4">Monthly Case Trends (2024)</h3>
+                    <div style="height: 320px; width: 100%; position: relative;">
+                        <Chart type="line" :data="trendsChartData" :options="barChartOptions" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cases by Judge Table -->
+            <div class="card mb-6">
+                <h3 class="card-title mb-4">Cases by Chairperson</h3>
+                <DataTable :value="casesByJudge" :paginator="true" :rows="5" stripedRows>
+                    <Column field="chairperson" header="Chairperson" :sortable="true" style="min-width: 200px;"></Column>
+                    <Column field="totalCases" header="Total" :sortable="true">
+                        <template #body="slotProps">
+                            <span class="font-semibold">{{ slotProps.data.totalCases }}</span>
+                        </template>
                     </Column>
-                    <Column field="name" header="HEARING DATE" :sortable="true" style="width: 35%"></Column>
-                    <Column field="price" header="VENUE" :sortable="true" style="width: 35%">
+                    <Column field="pending" header="Pending" :sortable="true">
+                        <template #body="slotProps">
+                            <Tag :value="slotProps.data.pending" severity="warn"></Tag>
+                        </template>
+                    </Column>
+                    <Column field="allowed" header="Allowed" :sortable="true">
+                        <template #body="slotProps">
+                            <Tag :value="slotProps.data.allowed" severity="success"></Tag>
+                        </template>
+                    </Column>
+                    <Column field="dismissed" header="Dismissed" :sortable="true">
+                        <template #body="slotProps">
+                            <Tag :value="slotProps.data.dismissed" severity="danger"></Tag>
+                        </template>
+                    </Column>
+                    <Column field="partiallyAllowed" header="Partial" :sortable="true">
+                        <template #body="slotProps">
+                            <Tag :value="slotProps.data.partiallyAllowed" severity="warn"></Tag>
+                        </template>
+                    </Column>
+                    <Column field="remanded" header="Remanded" :sortable="true">
+                        <template #body="slotProps">
+                            <Tag :value="slotProps.data.remanded" severity="info"></Tag>
+                        </template>
+                    </Column>
+                    <Column field="avgResolutionDays" header="Avg Days" :sortable="true">
+                        <template #body="slotProps">
+                            {{ slotProps.data.avgResolutionDays }} days
+                        </template>
                     </Column>
                 </DataTable>
             </div>
+
+            <!-- Recent Decisions -->
             <div class="card">
-                <div class="flex justify-between items-center mb-6">
-                    <div class="font-semibold text-xl">Top Appellants With Cases</div>
-                    <div>
-                        <Button icon="pi pi-ellipsis-v" class="p-button-text p-button-plain p-button-rounded" @click="$refs.menu2.toggle($event)"></Button>
-                        <Menu ref="menu2" :popup="true" :model="items" class="!min-w-40"></Menu>
-                    </div>
-                </div>
-                <ul class="list-none p-0 m-0" v-for="(appellant, index) in topAppellants" :key="appellant.id">
-                    <li class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                        <div>
-                            <span class="text-surface-900 dark:text-surface-0 font-medium mr-2 mb-1 md:mb-0">{{ appellant.name }}</span>
-                        </div>
-                        <div class="mt-2 md:mt-0 flex items-center">
-                            <span class="text-orange-500 ml-4 font-medium">{{ appellant.appealCount }}</span>
-                        </div>
-                    </li>
-                </ul>
-            </div>
-        </div>
-        <div class="col-span-12 xl:col-span-6">
-            <div class="card">
-                <div class="font-semibold text-xl mb-4">Yearly Cases</div>
-                <Chart type="bar" :data="chartData" :options="chartOptions" class="h-80" />
+                <h3 class="card-title mb-4">Recent Decisions</h3>
+                <DataTable :value="recentDecisions" stripedRows>
+                    <Column field="caseNumber" header="Case Number" :sortable="true" style="min-width: 180px;"></Column>
+                    <Column field="appellant" header="Appellant" :sortable="true" style="min-width: 200px;"></Column>
+                    <Column field="outcome" header="Outcome" :sortable="true">
+                        <template #body="slotProps">
+                            <Tag
+                                :value="slotProps.data.outcome.replace('_', ' ').toUpperCase()"
+                                :severity="getOutcomeSeverity(slotProps.data.outcome)"
+                            ></Tag>
+                        </template>
+                    </Column>
+                    <Column field="taxAmount" header="Tax Amount" :sortable="true">
+                        <template #body="slotProps">
+                            {{ formatCurrency(slotProps.data.taxAmount) }}
+                        </template>
+                    </Column>
+                    <Column field="decisionDate" header="Decision Date" :sortable="true"></Column>
+                    <Column field="chairperson" header="Chairperson" style="min-width: 200px;"></Column>
+                </DataTable>
             </div>
         </div>
     </div>
 </template>
+
+<style scoped>
+/* Government Enterprise Dashboard Styling */
+.dashboard-container {
+    padding: 1.5rem;
+    font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+}
+
+/* Stat Cards */
+.stat-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 4px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 6px rgba(27, 54, 93, 0.1);
+    transform: translateY(-2px);
+}
+
+.stat-label {
+    color: #64748B;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    color: #1B365D;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.stat-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Cards */
+.card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 4px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card-title {
+    color: #1B365D;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+/* Force charts to fill container */
+:deep(.p-chart) {
+    height: 100% !important;
+}
+
+:deep(.p-chart canvas) {
+    height: 100% !important;
+    max-height: 100% !important;
+}
+
+/* DataTable Styling */
+:deep(.p-datatable) {
+    border-radius: 4px;
+}
+
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+    background-color: #F8FAFC;
+    color: #1B365D;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    border-color: #E2E8F0;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr) {
+    border-color: #E2E8F0;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr:hover) {
+    background-color: #F8FAFC;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.p-row-odd) {
+    background-color: #FAFBFC;
+}
+
+/* Headings */
+h1 {
+    color: #1B365D;
+}
+
+h2, h3, h4 {
+    color: #1B365D;
+}
+
+/* Loading State */
+.pi-spinner {
+    color: #1B365D;
+}
+</style>

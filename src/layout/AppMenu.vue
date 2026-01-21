@@ -19,110 +19,26 @@ const model = ref([
         items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/dashboard' }]
     },
     {
-        label: 'Appeals',
-        icon: 'pi pi-fw pi-briefcase',
-        to: '/pages',
+        label: 'TRAB Case Repository',
         items: [
-            {
-                label: 'Notices',
-                icon: 'pi pi-fw pi-book',
-                to: '/pages/notices'
-            },
-            {
-                label: 'Statements',
-                icon: 'pi pi-fw pi-envelope',
-                to: '/pages/statements'
-            },
-            {
-                label: 'Applications',
-                icon: 'pi pi-fw pi-briefcase',
-                to: '/pages/applications'
-            },
-            {
-                label: 'Hearings',
-                icon: 'pi pi-fw pi-calendar-times',
-                to: '/pages/summons'
-            },
-            {
-                label: 'Notice High Court',
-                icon: 'pi pi-fw pi-calendar-times',
-                to: '/pages/high'
-            }
+            { label: 'Search Cases', icon: 'pi pi-fw pi-search', to: '/search' },
+            { label: 'OCR Management', icon: 'pi pi-fw pi-file', to: '/ocr' },
+            { label: 'Sync from TRAIS', icon: 'pi pi-fw pi-sync', to: '/sync' }
         ]
     },
     {
-        label: 'Payments',
+        label: 'Settings',
+        icon: 'pi pi-fw pi-cog',
         items: [
             {
-                label: 'Bill',
-                icon: 'pi pi-fw pi-bookmark',
-                to: '/bill'
-            },
-            {
-                label: 'Payment',
-                icon: 'pi pi-fw pi-dollar',
-                to: '/payment'
-            }
-        ]
-    },
-    {
-        label: 'SETTINGS',
-        items: [
-            {
-                label: 'Common Setup',
-                icon: 'pi pi-fw pi-cog',
-                to: '/common-setup'
-            },
-            {
-                label: 'Judge',
-                icon: 'pi pi-fw pi-id-card',
-                to: '/judges'
-            },
-            {
-                label: 'Parties',
-                icon: 'pi pi-fw pi-id-card',
-                to: '/parties'
-            },
-            {
-                label: 'Fees',
-                icon: 'pi pi-fw pi-cog',
-                to: '/fees'
-            },
-            {
-                label: 'User Management',
+                label: 'Users',
                 icon: 'pi pi-fw pi-user',
-                items: [
-                    {
-                        label: 'Users',
-                        icon: 'pi pi-fw pi-user',
-                        to: '/user-management/users'
-                    },
-                    {
-                        label: 'Roles',
-                        icon: 'pi pi-fw pi-users',
-                        to: '/user-management/roles'
-                    }
-                ]
-            }
-        ]
-    },
-    {
-        label: 'Reports',
-        items: [
-            {
-                label: 'Appeal Reports',
-                icon: 'pi pi-fw pi-chart-bar',
-                to: '/reports/appeal-reports'
+                to: '/user-management/users'
             },
             {
-                label: 'Payment Reports',
-                icon: 'pi pi-fw pi-dollar',
-                to: '/reports/payment-reports'
-            },
-            {
-                label: 'Cause List Reports',
-                icon: 'pi pi-fw pi-dollar',
-                to: '/reports/summons-reports'
+                label: 'Roles',
+                icon: 'pi pi-fw pi-users',
+                to: '/user-management/roles'
             }
         ]
     }
@@ -130,10 +46,13 @@ const model = ref([
 
 // Function to filter the menu based on permissions
 function filterMenu(model, permissions) {
+    // Handle null or undefined permissions
+    const permArray = permissions ? (Array.isArray(permissions) ? permissions : permissions.split(',')) : [];
+
     return model
         .map((item) => {
             // Check if the current item has a permission and if the user has that permission
-            if (item.permission && !permissions.includes(item.permission)) {
+            if (item.permission && !permArray.includes(item.permission)) {
                 return null; // This item is not allowed
             }
 
@@ -144,7 +63,7 @@ function filterMenu(model, permissions) {
                     let requiredPermission = Object.keys(permissionMapping).find((key) => permissionMapping[key].includes(subItem.label));
 
                     // Check if the user has the permission corresponding to the label
-                    return !requiredPermission || permissions.includes(requiredPermission);
+                    return !requiredPermission || permArray.includes(requiredPermission);
                 });
             }
 

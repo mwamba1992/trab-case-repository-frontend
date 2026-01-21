@@ -4,10 +4,10 @@ import { createRouter, createWebHistory } from 'vue-router';
 const router = createRouter({
     history: createWebHistory(),
     routes: [
-        // Default route redirects to login
+        // Default route redirects to search
         {
             path: '/',
-            redirect: '/login'
+            redirect: '/search'
         },
         // Login route
         {
@@ -20,6 +20,26 @@ const router = createRouter({
             path: '/',
             component: AppLayout,
             children: [
+                {
+                    path: '/search',
+                    name: 'search',
+                    component: () => import('@/views/SearchCases.vue')
+                },
+                {
+                    path: '/case/:id',
+                    name: 'CaseDetails',
+                    component: () => import('@/views/CaseDetails.vue')
+                },
+                {
+                    path: '/ocr',
+                    name: 'ocr',
+                    component: () => import('@/views/OcrManagement.vue')
+                },
+                {
+                    path: '/sync',
+                    name: 'sync',
+                    component: () => import('@/views/SyncManagement.vue')
+                },
                 {
                     path: '/dashboard',
                     name: 'dashboard',

@@ -67,3 +67,56 @@ function isOutsideClicked(event) {
     </div>
     <Toast />
 </template>
+
+<style scoped>
+/* Government Enterprise Layout Styling */
+.layout-wrapper {
+    font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+}
+
+.layout-main-container {
+    background: #F8FAFC !important;
+}
+
+.layout-main {
+    background: #F8FAFC !important;
+    min-height: calc(100vh - 8rem);
+}
+
+/* Ensure all cards have government styling */
+:deep(.card) {
+    border-radius: 2px !important;
+    border: 1px solid #E2E8F0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Global button styling */
+:deep(.p-button:not(.p-button-outlined):not(.p-button-text)) {
+    background-color: #1B365D !important;
+    border-color: #1B365D !important;
+    border-radius: 2px !important;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+}
+
+:deep(.p-button:not(.p-button-outlined):not(.p-button-text):hover) {
+    background-color: #2A4A7C !important;
+    border-color: #2A4A7C !important;
+}
+
+:deep(.p-button-outlined) {
+    border-color: #64748B !important;
+    color: #64748B !important;
+    border-radius: 2px !important;
+}
+
+:deep(.p-button-outlined:hover) {
+    background-color: #F1F5F9 !important;
+    color: #1B365D !important;
+}
+
+/* Reduce border radius globally */
+:deep(.p-component) {
+    border-radius: 2px !important;
+}
+</style>

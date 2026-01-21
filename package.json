@@ -1,6 +1,6 @@
 {
-    "name": "sakai-vue",
-    "version": "4.1.0",
+    "name": "trab-case-repository-frontend",
+    "version": "1.0.0",
     "scripts": {
         "dev": "vite",
         "build": "vite build",
