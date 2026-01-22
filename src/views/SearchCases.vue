@@ -24,7 +24,7 @@
             </div>
 
             <!-- Search Options -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <!-- Search Type -->
                 <div>
                     <label class="block mb-2 font-semibold">Search Type</label>
@@ -55,6 +55,140 @@
                 </div>
             </div>
 
+            <!-- Advanced Filters Toggle -->
+            <div class="mb-6">
+                <Button
+                    :label="showAdvancedFilters ? 'Hide Advanced Filters' : 'Show Advanced Filters'"
+                    :icon="showAdvancedFilters ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                    @click="showAdvancedFilters = !showAdvancedFilters"
+                    outlined
+                    size="small"
+                    class="mb-3"
+                />
+
+                <!-- Advanced Filters Panel -->
+                <Panel v-if="showAdvancedFilters" header="Advanced Filters" :toggleable="false" class="advanced-filters-panel">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Tax Type Filter -->
+                        <div class="filter-group">
+                            <label class="filter-label">
+                                <i class="pi pi-folder"></i>
+                                Tax Type
+                            </label>
+                            <Select
+                                v-model="filters.taxType"
+                                :options="taxTypes"
+                                optionLabel="label"
+                                optionValue="value"
+                                placeholder="All Tax Types"
+                                class="w-full"
+                                :showClear="true"
+                            />
+                        </div>
+
+                        <!-- Outcome Filter -->
+                        <div class="filter-group">
+                            <label class="filter-label">
+                                <i class="pi pi-check-circle"></i>
+                                Outcome
+                            </label>
+                            <Select
+                                v-model="filters.outcome"
+                                :options="outcomes"
+                                optionLabel="label"
+                                optionValue="value"
+                                placeholder="All Outcomes"
+                                class="w-full"
+                                :showClear="true"
+                            />
+                        </div>
+
+                        <!-- Chairperson Filter -->
+                        <div class="filter-group">
+                            <label class="filter-label">
+                                <i class="pi pi-user"></i>
+                                Chairperson
+                            </label>
+                            <Select
+                                v-model="filters.chairperson"
+                                :options="chairpersons"
+                                placeholder="All Chairpersons"
+                                class="w-full"
+                                :showClear="true"
+                                :loading="loadingChairpersons"
+                                filter
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Date Range Filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                        <div class="filter-group">
+                            <label class="filter-label">
+                                <i class="pi pi-calendar"></i>
+                                Decision Date From
+                            </label>
+                            <DatePicker
+                                v-model="filters.decisionDateFrom"
+                                placeholder="Select start date"
+                                dateFormat="yy-mm-dd"
+                                class="w-full"
+                                :showClear="true"
+                            />
+                        </div>
+
+                        <div class="filter-group">
+                            <label class="filter-label">
+                                <i class="pi pi-calendar"></i>
+                                Decision Date To
+                            </label>
+                            <DatePicker
+                                v-model="filters.decisionDateTo"
+                                placeholder="Select end date"
+                                dateFormat="yy-mm-dd"
+                                class="w-full"
+                                :showClear="true"
+                            />
+                        </div>
+
+                        <div class="filter-group">
+                            <label class="filter-label">
+                                <i class="pi pi-money-bill"></i>
+                                Min Amount Disputed (TZS)
+                            </label>
+                            <InputNumber
+                                v-model="filters.minAmountDisputed"
+                                placeholder="e.g., 1000000"
+                                class="w-full"
+                                :min="0"
+                                mode="currency"
+                                currency="TZS"
+                                locale="en-TZ"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Filter Actions -->
+                    <div class="flex gap-3 mt-4">
+                        <Button
+                            label="Apply Filters"
+                            icon="pi pi-filter"
+                            @click="applyFilters"
+                            size="small"
+                        />
+                        <Button
+                            label="Clear All Filters"
+                            icon="pi pi-times"
+                            @click="clearFilters"
+                            outlined
+                            severity="secondary"
+                            size="small"
+                        />
+                        <Tag v-if="activeFiltersCount > 0" :value="`${activeFiltersCount} filter(s) active`" severity="info" />
+                    </div>
+                </Panel>
+            </div>
+
             <!-- Weight Sliders (for Hybrid Search) -->
             <div v-if="searchType === 'hybrid'" class="mb-6 p-4 bg-gray-50 rounded-lg">
                 <h3 class="text-lg font-semibold mb-4">Search Weights</h3>
@@ -71,17 +205,42 @@
             </div>
 
             <!-- Search Results -->
-            <div v-if="searchResults && searchResults.results.length > 0" class="results-container">
+            <div v-if="filteredResults && filteredResults.results.length > 0" class="results-container">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold">
-                        Found {{ searchResults.totalResults }} results
-                    </h3>
-                    <Tag :value="searchResults.searchType" severity="info" />
+                    <div>
+                        <h3 class="text-xl font-semibold">
+                            Found {{ filteredResults.totalResults }} results
+                            <span v-if="activeFiltersCount > 0" class="text-sm text-gray-500 ml-2">
+                                ({{ searchResults.totalResults }} total, filtered to {{ filteredResults.totalResults }})
+                            </span>
+                        </h3>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <Tag :value="filteredResults.searchType" severity="info" />
+                        <Button
+                            icon="pi pi-file-excel"
+                            label="Export to Excel"
+                            severity="success"
+                            outlined
+                            size="small"
+                            @click="exportToExcel"
+                            v-tooltip.top="'Export search results to Excel'"
+                        />
+                        <Button
+                            icon="pi pi-download"
+                            label="Export to CSV"
+                            severity="secondary"
+                            outlined
+                            size="small"
+                            @click="exportToCSV"
+                            v-tooltip.top="'Export search results to CSV'"
+                        />
+                    </div>
                 </div>
 
                 <!-- Results List -->
                 <div class="space-y-4">
-                    <Card v-for="(result, index) in searchResults.results" :key="index" class="result-card">
+                    <Card v-for="(result, index) in filteredResults.results" :key="index" class="result-card">
                         <template #title>
                             <div class="flex justify-between items-start">
                                 <div>
@@ -119,7 +278,10 @@
                                 </div>
                                 <div v-if="result.caseMetadata.outcome">
                                     <p class="font-semibold">Outcome:</p>
-                                    <Tag :value="result.caseMetadata.outcome" :severity="getOutcomeSeverity(result.caseMetadata.outcome)" />
+                                    <Tag :severity="getOutcomeSeverity(result.caseMetadata.outcome)" class="outcome-tag">
+                                        <i :class="getOutcomeIcon(result.caseMetadata.outcome)" class="mr-2"></i>
+                                        {{ result.caseMetadata.outcome.replace('_', ' ').toUpperCase() }}
+                                    </Tag>
                                 </div>
                             </div>
 
@@ -151,9 +313,12 @@
             </div>
 
             <!-- No Results -->
-            <div v-else-if="searchResults && searchResults.results.length === 0" class="text-center py-8">
+            <div v-else-if="(filteredResults && filteredResults.results.length === 0) || (searchResults && searchResults.results.length === 0)" class="text-center py-8">
                 <i class="pi pi-search text-6xl text-gray-300"></i>
-                <p class="text-xl text-gray-500 mt-4">No results found for "{{ searchQuery }}"</p>
+                <p v-if="activeFiltersCount > 0 && searchResults && searchResults.results.length > 0" class="text-xl text-gray-500 mt-4">
+                    No results match your filters. Try adjusting or clearing the filters.
+                </p>
+                <p v-else class="text-xl text-gray-500 mt-4">No results found for "{{ searchQuery }}"</p>
             </div>
 
             <!-- Error Message -->
@@ -166,6 +331,7 @@
 
 <script>
 import SearchService from '@/service/SearchService';
+import CaseService from '@/service/CaseService';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Select from 'primevue/select';
@@ -174,11 +340,9 @@ import Slider from 'primevue/slider';
 import Card from 'primevue/card';
 import Tag from 'primevue/tag';
 import Message from 'primevue/message';
-
 import Panel from 'primevue/panel';
-
-import DataTable from 'primevue/datatable';
-import Column from 'primevue/column';
+import DatePicker from 'primevue/datepicker';
+import * as XLSX from 'xlsx';
 
 export default {
     name: 'SearchCases',
@@ -191,7 +355,8 @@ export default {
         Card,
         Tag,
         Message,
-        Panel
+        Panel,
+        DatePicker
     },
     data() {
         return {
@@ -207,10 +372,110 @@ export default {
             semWeight: 0.5,
             searchResults: null,
             loading: false,
-            errorMessage: null
+            errorMessage: null,
+            showAdvancedFilters: false,
+            filters: {
+                taxType: null,
+                outcome: null,
+                chairperson: null,
+                decisionDateFrom: null,
+                decisionDateTo: null,
+                minAmountDisputed: null
+            },
+            taxTypes: [
+                { label: 'Income Tax', value: 'income_tax' },
+                { label: 'VAT', value: 'vat' },
+                { label: 'Customs', value: 'customs' },
+                { label: 'Excise', value: 'excise' },
+                { label: 'Stamp Duty', value: 'stamp_duty' },
+                { label: 'Other', value: 'other' }
+            ],
+            outcomes: [
+                { label: 'Allowed', value: 'allowed' },
+                { label: 'Dismissed', value: 'dismissed' },
+                { label: 'Partially Allowed', value: 'partially_allowed' },
+                { label: 'Remanded', value: 'remanded' },
+                { label: 'Other', value: 'other' }
+            ],
+            chairpersons: [],
+            loadingChairpersons: false
         };
     },
+    mounted() {
+        this.loadChairpersons();
+    },
+    computed: {
+        activeFiltersCount() {
+            let count = 0;
+            if (this.filters.taxType) count++;
+            if (this.filters.outcome) count++;
+            if (this.filters.chairperson) count++;
+            if (this.filters.decisionDateFrom) count++;
+            if (this.filters.decisionDateTo) count++;
+            if (this.filters.minAmountDisputed && this.filters.minAmountDisputed > 0) count++;
+            return count;
+        },
+        filteredResults() {
+            if (!this.searchResults || !this.searchResults.results) return null;
+
+            let filtered = [...this.searchResults.results];
+
+            // Apply client-side filters
+            if (this.filters.taxType) {
+                filtered = filtered.filter(r => r.caseMetadata.caseType === this.filters.taxType);
+            }
+
+            if (this.filters.outcome) {
+                filtered = filtered.filter(r => r.caseMetadata.outcome === this.filters.outcome);
+            }
+
+            if (this.filters.chairperson) {
+                filtered = filtered.filter(r => r.caseMetadata.chairperson === this.filters.chairperson);
+            }
+
+            if (this.filters.decisionDateFrom) {
+                const fromDate = new Date(this.filters.decisionDateFrom);
+                filtered = filtered.filter(r =>
+                    r.caseMetadata.decisionDate &&
+                    new Date(r.caseMetadata.decisionDate) >= fromDate
+                );
+            }
+
+            if (this.filters.decisionDateTo) {
+                const toDate = new Date(this.filters.decisionDateTo);
+                filtered = filtered.filter(r =>
+                    r.caseMetadata.decisionDate &&
+                    new Date(r.caseMetadata.decisionDate) <= toDate
+                );
+            }
+
+            if (this.filters.minAmountDisputed && this.filters.minAmountDisputed > 0) {
+                filtered = filtered.filter(r =>
+                    r.caseMetadata.taxAmountDisputed &&
+                    r.caseMetadata.taxAmountDisputed >= this.filters.minAmountDisputed
+                );
+            }
+
+            return {
+                ...this.searchResults,
+                results: filtered,
+                totalResults: filtered.length
+            };
+        }
+    },
     methods: {
+        async loadChairpersons() {
+            this.loadingChairpersons = true;
+            try {
+                const chairpersonsList = await CaseService.getChairpersons();
+                this.chairpersons = chairpersonsList;
+            } catch (error) {
+                console.error('Error loading chairpersons:', error);
+                this.chairpersons = [];
+            } finally {
+                this.loadingChairpersons = false;
+            }
+        },
         async performSearch() {
             if (!this.searchQuery.trim()) {
                 this.errorMessage = 'Please enter a search query';
@@ -264,6 +529,15 @@ export default {
             };
             return severityMap[outcome] || 'info';
         },
+        getOutcomeIcon(outcome) {
+            const iconMap = {
+                'allowed': 'pi pi-check-circle',
+                'dismissed': 'pi pi-times-circle',
+                'partially_allowed': 'pi pi-exclamation-circle',
+                'remanded': 'pi pi-replay'
+            };
+            return iconMap[outcome] || 'pi pi-info-circle';
+        },
         formatCurrency(amount) {
             return new Intl.NumberFormat('en-TZ', {
                 style: 'currency',
@@ -288,6 +562,163 @@ export default {
 
             // Replace matched terms with highlighted version
             return content.replace(regex, '<span class="highlight">$1</span>');
+        },
+        applyFilters() {
+            // Filters are applied automatically via the filteredResults computed property
+            // This method can be used for additional actions like analytics or notifications
+            if (this.activeFiltersCount > 0) {
+                this.$toast?.add({
+                    severity: 'info',
+                    summary: 'Filters Applied',
+                    detail: `${this.activeFiltersCount} filter(s) active`,
+                    life: 2000
+                });
+            }
+        },
+        clearFilters() {
+            this.filters = {
+                taxType: null,
+                outcome: null,
+                chairperson: null,
+                decisionDateFrom: null,
+                decisionDateTo: null,
+                minAmountDisputed: null
+            };
+            this.$toast?.add({
+                severity: 'success',
+                summary: 'Filters Cleared',
+                detail: 'All filters have been reset',
+                life: 2000
+            });
+        },
+        exportToExcel() {
+            if (!this.filteredResults || this.filteredResults.results.length === 0) {
+                this.$toast?.add({
+                    severity: 'warn',
+                    summary: 'No Data',
+                    detail: 'No search results to export',
+                    life: 3000
+                });
+                return;
+            }
+
+            // Prepare data for export
+            const exportData = this.filteredResults.results.map((result, index) => ({
+                'No.': index + 1,
+                'Case Number': result.caseMetadata.caseNumber || 'N/A',
+                'Case Type': result.caseMetadata.caseType || 'N/A',
+                'Appellant': result.caseMetadata.appellant || 'N/A',
+                'Respondent': result.caseMetadata.respondent || 'N/A',
+                'Status': result.caseMetadata.status || 'N/A',
+                'Outcome': result.caseMetadata.outcome || 'N/A',
+                'Tax Amount Disputed (TZS)': result.caseMetadata.taxAmountDisputed || 0,
+                'Chairperson': result.caseMetadata.chairperson || 'N/A',
+                'Decision Date': result.caseMetadata.decisionDate || 'N/A',
+                'Match Type': result.matchType || 'N/A',
+                'Score': result.score?.toFixed(3) || 'N/A',
+                'Document': result.documentName || 'N/A',
+                'Page': result.pageNumber || 'N/A'
+            }));
+
+            // Create workbook and worksheet
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Search Results');
+
+            // Auto-size columns
+            const maxWidth = 50;
+            const wscols = Object.keys(exportData[0]).map(key => ({
+                wch: Math.min(Math.max(key.length, 10), maxWidth)
+            }));
+            ws['!cols'] = wscols;
+
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = `TRAB_Search_Results_${timestamp}.xlsx`;
+
+            // Download file
+            XLSX.writeFile(wb, filename);
+
+            this.$toast?.add({
+                severity: 'success',
+                summary: 'Export Successful',
+                detail: `Exported ${this.filteredResults.results.length} results to Excel`,
+                life: 3000
+            });
+        },
+        exportToCSV() {
+            if (!this.filteredResults || this.filteredResults.results.length === 0) {
+                this.$toast?.add({
+                    severity: 'warn',
+                    summary: 'No Data',
+                    detail: 'No search results to export',
+                    life: 3000
+                });
+                return;
+            }
+
+            // Prepare CSV data
+            const headers = [
+                'No.',
+                'Case Number',
+                'Case Type',
+                'Appellant',
+                'Respondent',
+                'Status',
+                'Outcome',
+                'Tax Amount Disputed (TZS)',
+                'Chairperson',
+                'Decision Date',
+                'Match Type',
+                'Score',
+                'Document',
+                'Page'
+            ];
+
+            const rows = this.filteredResults.results.map((result, index) => [
+                index + 1,
+                result.caseMetadata.caseNumber || 'N/A',
+                result.caseMetadata.caseType || 'N/A',
+                result.caseMetadata.appellant || 'N/A',
+                result.caseMetadata.respondent || 'N/A',
+                result.caseMetadata.status || 'N/A',
+                result.caseMetadata.outcome || 'N/A',
+                result.caseMetadata.taxAmountDisputed || 0,
+                result.caseMetadata.chairperson || 'N/A',
+                result.caseMetadata.decisionDate || 'N/A',
+                result.matchType || 'N/A',
+                result.score?.toFixed(3) || 'N/A',
+                result.documentName || 'N/A',
+                result.pageNumber || 'N/A'
+            ]);
+
+            // Convert to CSV string
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+
+            // Create blob and download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = `TRAB_Search_Results_${timestamp}.csv`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            this.$toast?.add({
+                severity: 'success',
+                summary: 'Export Successful',
+                detail: `Exported ${this.filteredResults.results.length} results to CSV`,
+                life: 3000
+            });
         }
     }
 };
@@ -346,6 +777,60 @@ export default {
 :deep(.p-inputnumber:focus-within) {
     border-color: #1B365D !important;
     box-shadow: 0 0 0 2px rgba(27, 54, 93, 0.1) !important;
+}
+
+/* Select dropdown improvements */
+:deep(.p-select .p-select-label) {
+    padding: 0.625rem 0.75rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+:deep(.p-select.p-variant-filled .p-select-label) {
+    background-color: #F8FAFC;
+}
+
+:deep(.p-select-option) {
+    padding: 0.625rem 1rem;
+    border-radius: 2px;
+    margin: 2px 4px;
+}
+
+:deep(.p-select-option:hover) {
+    background-color: #F1F5F9;
+    color: #1B365D;
+}
+
+:deep(.p-select-option.p-focus) {
+    background-color: #E0E7FF;
+    color: #1B365D;
+}
+
+:deep(.p-select-option.p-selected) {
+    background-color: #1B365D;
+    color: #FFFFFF;
+    font-weight: 600;
+}
+
+:deep(.p-select-overlay) {
+    border-radius: 2px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+:deep(.p-select-filter-container) {
+    padding: 0.5rem;
+    border-bottom: 1px solid #E2E8F0;
+}
+
+:deep(.p-select-filter) {
+    border-radius: 2px;
+    border-color: #E2E8F0;
+}
+
+:deep(.p-select-filter:focus) {
+    border-color: #1B365D;
+    box-shadow: 0 0 0 2px rgba(27, 54, 93, 0.1);
 }
 
 /* Tags with better government colors */
@@ -409,5 +894,63 @@ label {
 :deep(*:focus) {
     outline: 2px solid #1B365D !important;
     outline-offset: 2px !important;
+}
+
+/* Advanced Filters Panel */
+.advanced-filters-panel {
+    background: #F8FAFC;
+    border-radius: 2px;
+    border: 1px solid #E2E8F0;
+}
+
+:deep(.advanced-filters-panel .p-panel-header) {
+    background-color: #1B365D;
+    color: #FFFFFF;
+    border-radius: 2px 2px 0 0;
+    padding: 0.75rem 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.875rem;
+}
+
+:deep(.advanced-filters-panel .p-panel-content) {
+    padding: 1.25rem;
+    background: #FFFFFF;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-label {
+    color: #475569;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-label i {
+    color: #1B365D;
+    font-size: 0.875rem;
+}
+
+/* Enhanced Outcome Tags */
+.outcome-tag {
+    font-size: 0.875rem !important;
+    padding: 0.5rem 1rem !important;
+    font-weight: 700 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+.outcome-tag i {
+    font-size: 1rem;
 }
 </style>

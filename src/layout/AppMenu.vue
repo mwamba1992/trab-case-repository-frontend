@@ -22,13 +22,14 @@ const model = ref([
         label: 'TRAB Case Repository',
         items: [
             { label: 'Search Cases', icon: 'pi pi-fw pi-search', to: '/search' },
-            { label: 'OCR Management', icon: 'pi pi-fw pi-file', to: '/ocr' },
-            { label: 'Sync from TRAIS', icon: 'pi pi-fw pi-sync', to: '/sync' }
+            { label: 'OCR Management', icon: 'pi pi-fw pi-file', to: '/ocr', adminOnly: true },
+            { label: 'Sync from TRAIS', icon: 'pi pi-fw pi-sync', to: '/sync', adminOnly: true }
         ]
     },
     {
         label: 'Settings',
         icon: 'pi pi-fw pi-cog',
+        adminOnly: true,
         items: [
             {
                 label: 'Users',
@@ -44,37 +45,71 @@ const model = ref([
     }
 ]);
 
-// Function to filter the menu based on permissions
-function filterMenu(model, permissions) {
+// Function to filter the menu based on permissions and roles
+function filterMenu(model, permissions, userRole) {
     // Handle null or undefined permissions
     const permArray = permissions ? (Array.isArray(permissions) ? permissions : permissions.split(',')) : [];
 
+    // Check if user is admin
+    const isAdmin = userRole === 'admin';
+
     return model
         .map((item) => {
+            // Clone the item to avoid mutating the original
+            const clonedItem = { ...item };
+
+            // If item is admin-only and user is not admin, skip it
+            if (clonedItem.adminOnly && !isAdmin) {
+                return null;
+            }
+
+            // Check allowed roles for the item
+            if (clonedItem.allowedRoles && !clonedItem.allowedRoles.includes(userRole)) {
+                return null;
+            }
+
             // Check if the current item has a permission and if the user has that permission
-            if (item.permission && !permArray.includes(item.permission)) {
+            if (clonedItem.permission && !permArray.includes(clonedItem.permission)) {
                 return null; // This item is not allowed
             }
 
-            // Filter the 'items' of the current item based on permissions
-            if (item.items) {
-                item.items = item.items.filter((subItem) => {
+            // Filter the 'items' of the current item based on permissions and roles
+            if (clonedItem.items) {
+                clonedItem.items = clonedItem.items.filter((subItem) => {
+                    // If sub-item is admin-only and user is not admin, skip it
+                    if (subItem.adminOnly && !isAdmin) {
+                        return false;
+                    }
+
+                    // Check allowed roles for sub-item
+                    if (subItem.allowedRoles && !subItem.allowedRoles.includes(userRole)) {
+                        return false;
+                    }
+
                     // Find the required permission for this item using permissionMapping
                     let requiredPermission = Object.keys(permissionMapping).find((key) => permissionMapping[key].includes(subItem.label));
 
                     // Check if the user has the permission corresponding to the label
                     return !requiredPermission || permArray.includes(requiredPermission);
                 });
+
+                // If no items remain after filtering, hide the parent section
+                if (clonedItem.items.length === 0) {
+                    return null;
+                }
             }
 
-            return item; // Return the item (can be null if filtered out)
+            return clonedItem; // Return the item (can be null if filtered out)
         })
         .filter((item) => item !== null); // Filter out any null items (those that were removed)
 }
-// Retrieve permissions string from localStorage;
+
+// Retrieve permissions string and user role from localStorage
+const permissions = localStorage.getItem('permissions');
+const userRole = localStorage.getItem('userRole');
 
 // Apply the filter to the model
-const filteredModel = filterMenu(model.value, localStorage.getItem('permissions'));
+const filteredModel = filterMenu(model.value, permissions, userRole);
 </script>
 
 <template>

@@ -13,14 +13,12 @@ const api = axios.create({
 // Request Interceptor to append token
 api.interceptors.request.use(
     (config) => {
-        // Get token from localStorage or Vuex store
+        // Get token from localStorage
         const token = localStorage.getItem('access_token');
 
         // If token exists, append it to the Authorization header
         if (token) {
             config.headers['Authorization'] = `Bearer ${token}`;
-        } else {
-            window.location.href = '/login';
         }
 
         return config;
@@ -40,41 +38,60 @@ api.interceptors.response.use(
     async (error) => {
         // Check if the error is a 401 (Unauthorized)
         if (error.response && error.response.status === 401) {
+            const originalRequest = error.config;
+
+            // Prevent infinite loop - don't retry refresh endpoint
+            if (originalRequest.url.includes('/auth/refresh') || originalRequest._retry) {
+                // If refresh failed or already retried, redirect to login
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('userId');
+                localStorage.removeItem('userName');
+                localStorage.removeItem('permissions');
+                window.location.href = '/login';
+                return Promise.reject(error);
+            }
+
+            // Mark request as retried
+            originalRequest._retry = true;
 
             // Token might have expired or is invalid
             const refreshToken = localStorage.getItem('refresh_token');
 
             if (refreshToken) {
                 try {
-                    const refreshTokenDto = {
-                        refreshToken: refreshToken,
-                        userId: localStorage.getItem('userId')
-                    };
                     // Attempt to refresh the token by making a refresh request
-                    const response = await api.post('/auth/refresh', { refreshTokenDto });
+                    const response = await api.post('/auth/refresh', { refreshToken });
 
-                    // Get the new token from the response
-                    const { newToken } = response.data;
+                    // Get the new tokens from the response
+                    const { accessToken, refreshToken: newRefreshToken } = response.data;
 
-                    // Store the new token in localStorage (or Vuex)
-                    localStorage.setItem('access_token', newToken);
+                    // Store the new tokens in localStorage
+                    localStorage.setItem('access_token', accessToken);
+                    localStorage.setItem('refresh_token', newRefreshToken);
 
                     // Update the original request's Authorization header with the new token
-                    error.config.headers['Authorization'] = `Bearer ${newToken}`;
+                    originalRequest.headers['Authorization'] = `Bearer ${accessToken}`;
 
                     // Retry the original request with the new token
-                    return api(error.config);
+                    return api(originalRequest);
                 } catch (refreshError) {
                     // If refreshing the token fails, logout the user or redirect to login
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
-                    // Redirect to login page or show login modal
+                    localStorage.removeItem('userId');
+                    localStorage.removeItem('userName');
+                    localStorage.removeItem('permissions');
                     window.location.href = '/login';
+                    return Promise.reject(refreshError);
                 }
             } else {
                 // No refresh token available, redirect to login
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
+                localStorage.removeItem('userId');
+                localStorage.removeItem('userName');
+                localStorage.removeItem('permissions');
                 window.location.href = '/login';
             }
         }

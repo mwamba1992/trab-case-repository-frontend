@@ -5,19 +5,72 @@ const API_URL = `${Config.API_BASE_URL}/cases`;
 
 class DashboardService {
     /**
-     * Get dashboard statistics from the cases stats endpoint
-     * Uses /api/v1/cases/stats
+     * Get dashboard statistics from the cases endpoint
+     * Counts all cases from /api/v1/cases
      */
     async getDashboardStats() {
         try {
-            const response = await axios.get(`${API_URL}/stats`);
-            const statsData = await this.transformStatsData(response.data);
+            // First, try to get stats from stats endpoint
+            let statsData;
+            try {
+                const statsResponse = await axios.get(`${API_URL}/stats`);
+                statsData = await this.transformStatsData(statsResponse.data);
+            } catch (statsError) {
+                console.log('Stats endpoint unavailable, counting from cases endpoint');
+                statsData = {};
+            }
+
+            // Always count total cases from /api/v1/cases endpoint
+            const casesResponse = await axios.get(API_URL, {
+                params: { limit: 10000 } // Get all cases
+            });
+
+            const cases = casesResponse.data.cases || casesResponse.data || [];
+            const totalCasesCount = Array.isArray(cases) ? cases.length : (casesResponse.data.total || 0);
+
+            // Update total cases with actual count from cases endpoint
+            statsData.totalCases = totalCasesCount;
+
+            // Count outcomes from the cases (this is a decision portal - all cases are decided)
+            if (Array.isArray(cases)) {
+                const outcomes = {
+                    allowed: 0,
+                    dismissed: 0,
+                    partially_allowed: 0,
+                    remanded: 0
+                };
+
+                cases.forEach(caseItem => {
+                    const outcome = (caseItem.outcome || '').toLowerCase().replace(/\s+/g, '_');
+                    if (outcome === 'allowed') {
+                        outcomes.allowed++;
+                    } else if (outcome === 'dismissed') {
+                        outcomes.dismissed++;
+                    } else if (outcome === 'partially_allowed' || outcome === 'partial') {
+                        outcomes.partially_allowed++;
+                    } else if (outcome === 'remanded') {
+                        outcomes.remanded++;
+                    }
+                });
+
+                statsData.allowedCases = outcomes.allowed;
+                statsData.dismissedCases = outcomes.dismissed;
+                statsData.partiallyAllowedCases = outcomes.partially_allowed;
+                statsData.remandedCases = outcomes.remanded;
+            }
 
             // If average resolution days is 0 or not provided, calculate it from cases
             if (!statsData.averageResolutionDays || statsData.averageResolutionDays === 0) {
                 const avgDays = await this.calculateAverageResolutionDays();
                 statsData.averageResolutionDays = avgDays;
             }
+
+            // Ensure we have required fields
+            statsData.appealedCases = statsData.appealedCases || 0;
+            statsData.totalTaxDisputed = statsData.totalTaxDisputed || 0;
+            statsData.totalTaxRecovered = statsData.totalTaxRecovered || 0;
+            statsData.casesByType = statsData.casesByType || this.getMockDashboardData().casesByType;
+            statsData.monthlyTrends = statsData.monthlyTrends || this.getMockDashboardData().monthlyTrends;
 
             return statsData;
         } catch (error) {
@@ -89,20 +142,16 @@ class DashboardService {
 
     /**
      * Get cases grouped by chairperson/judge
-     * This will query the stats endpoint or aggregate from all cases
+     * Aggregates from all cases (Decision Portal - all cases are decided)
      */
     async getCasesByJudge() {
         try {
-            // First try to get from stats endpoint
-            const statsResponse = await axios.get(`${API_URL}/stats`);
-            if (statsResponse.data.casesByChairperson) {
-                return statsResponse.data.casesByChairperson;
-            }
+            // Always aggregate from all cases for consistency
+            const casesResponse = await axios.get(API_URL, { params: { limit: 10000 } });
+            const cases = casesResponse.data.cases || casesResponse.data || [];
 
-            // If not available in stats, aggregate from all cases
-            const casesResponse = await axios.get(API_URL, { params: { limit: 1000 } });
-            if (casesResponse.data.cases) {
-                return this.aggregateCasesByChairperson(casesResponse.data.cases);
+            if (Array.isArray(cases) && cases.length > 0) {
+                return this.aggregateCasesByChairperson(cases);
             }
 
             return this.getMockCasesByJudge();
@@ -496,6 +545,7 @@ class DashboardService {
         }
 
         return cases.map(caseItem => ({
+            id: caseItem.id, // Include case ID for navigation
             caseNumber: caseItem.caseNumber || 'N/A',
             appellant: caseItem.appellant || 'Unknown',
             outcome: caseItem.outcome || 'pending',
@@ -637,6 +687,7 @@ class DashboardService {
     getMockRecentDecisions() {
         return [
             {
+                id: 'mock-case-1',
                 caseNumber: 'TRAB/VAT/APP/2024/156',
                 appellant: 'ABC Trading Company Ltd',
                 outcome: 'allowed',
@@ -645,6 +696,7 @@ class DashboardService {
                 chairperson: 'Hon. Dr. Azaveli M. Lwiza'
             },
             {
+                id: 'mock-case-2',
                 caseNumber: 'TRAB/IT/APP/2024/134',
                 appellant: 'XYZ Manufacturing Ltd',
                 outcome: 'partially_allowed',
@@ -653,6 +705,7 @@ class DashboardService {
                 chairperson: 'Hon. Hamza A. Johari'
             },
             {
+                id: 'mock-case-3',
                 caseNumber: 'TRAB/CE/APP/2024/089',
                 appellant: 'Global Imports & Exports',
                 outcome: 'dismissed',
@@ -661,6 +714,7 @@ class DashboardService {
                 chairperson: 'Hon. Dr. Happiness E. Murusuri'
             },
             {
+                id: 'mock-case-4',
                 caseNumber: 'TRAB/VAT/APP/2024/145',
                 appellant: 'Tech Solutions Tanzania',
                 outcome: 'allowed',
@@ -669,6 +723,7 @@ class DashboardService {
                 chairperson: 'Hon. Jokate J. Shija'
             },
             {
+                id: 'mock-case-5',
                 caseNumber: 'TRAB/IT/APP/2024/098',
                 appellant: 'Coastal Traders Ltd',
                 outcome: 'remanded',

@@ -2,9 +2,10 @@
 import { useLayout } from '@/layout/composables/layout';
 import AppConfigurator from './AppConfigurator.vue';
 import { onMounted, ref } from 'vue';
+import AuthService from '@/service/AuthService';
+import router from '@/router';
 
 const { onMenuToggle, toggleDarkMode, isDarkTheme } = useLayout();
-
 
 let userName = ref();
 
@@ -12,11 +13,16 @@ onMounted(() => {
     userName.value = localStorage.getItem('userName');
 });
 
-function logout() {
-    localStorage.clear();
-    window.location.href = '/login';
-
-    console.log("##### logout #######")
+async function logout() {
+    try {
+        // Call backend logout endpoint
+        await AuthService.logout();
+    } catch (error) {
+        console.error('Logout error:', error);
+    } finally {
+        // Redirect to login page (AuthService.logout already clears localStorage)
+        router.push('/login');
+    }
 }
 </script>
 

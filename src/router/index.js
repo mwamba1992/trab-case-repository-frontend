@@ -1,5 +1,6 @@
 import AppLayout from '@/layout/AppLayout.vue';
 import { createRouter, createWebHistory } from 'vue-router';
+import AuthService from '@/service/AuthService';
 
 const router = createRouter({
     history: createWebHistory(),
@@ -7,7 +8,7 @@ const router = createRouter({
         // Default route redirects to search
         {
             path: '/',
-            redirect: '/search'
+            redirect: '/dashboard'
         },
         // Login route
         {
@@ -19,6 +20,7 @@ const router = createRouter({
         {
             path: '/',
             component: AppLayout,
+            meta: { requiresAuth: true },
             children: [
                 {
                     path: '/search',
@@ -161,6 +163,25 @@ const router = createRouter({
             component: () => import('@/views/pages/appeals/NotFound.vue')
         }
     ]
+});
+
+// Navigation guard for authentication
+router.beforeEach((to, from, next) => {
+    const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+    const isAuthenticated = AuthService.isAuthenticated();
+
+    if (requiresAuth && !isAuthenticated) {
+        // Redirect to login if route requires auth and user is not authenticated
+        next({
+            path: '/login',
+            query: { redirect: to.fullPath }
+        });
+    } else if (to.path === '/login' && isAuthenticated) {
+        // Redirect to dashboard if user is already authenticated and tries to access login
+        next('/dashboard');
+    } else {
+        next();
+    }
 });
 
 export default router;

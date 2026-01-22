@@ -1,16 +1,21 @@
 <script setup>
 import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import DashboardService from '@/service/DashboardService';
 import Chart from 'primevue/chart';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
+import Button from 'primevue/button';
+
+const router = useRouter();
 
 // Dashboard data
 const dashboardStats = ref(null);
 const casesByJudge = ref([]);
 const casesByStatus = ref(null);
 const casesByOutcome = ref(null);
+const casesByType = ref(null);
 const recentDecisions = ref([]);
 
 // Chart data
@@ -34,6 +39,7 @@ async function loadDashboardData() {
         casesByJudge.value = await DashboardService.getCasesByJudge();
         casesByStatus.value = await DashboardService.getCasesByStatus();
         casesByOutcome.value = await DashboardService.getCasesByOutcome();
+        casesByType.value = await DashboardService.getCasesByType();
         recentDecisions.value = await DashboardService.getRecentDecisions();
 
         // Setup charts
@@ -123,8 +129,8 @@ function setupTrendsChart() {
 }
 
 function setupTypeChart() {
-    const types = Object.keys(dashboardStats.value.casesByType);
-    const values = Object.values(dashboardStats.value.casesByType);
+    const types = Object.keys(casesByType.value);
+    const values = Object.values(casesByType.value);
 
     typeChartData.value = {
         labels: types,
@@ -224,6 +230,10 @@ const getOutcomeSeverity = (outcome) => {
     };
     return severityMap[outcome] || 'info';
 };
+
+const viewCaseDetails = (caseId) => {
+    router.push({ name: 'CaseDetails', params: { id: caseId } });
+};
 </script>
 
 <template>
@@ -256,28 +266,28 @@ const getOutcomeSeverity = (outcome) => {
                     </div>
                 </div>
 
-                <!-- Pending Cases -->
+                <!-- Allowed Cases -->
                 <div class="stat-card">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="stat-label">Pending Cases</p>
-                            <h3 class="stat-value">{{ dashboardStats.pendingCases.toLocaleString() }}</h3>
+                            <p class="stat-label">Allowed Cases</p>
+                            <h3 class="stat-value">{{ dashboardStats.allowedCases.toLocaleString() }}</h3>
                         </div>
-                        <div class="stat-icon bg-orange-100">
-                            <i class="pi pi-clock text-orange-600 text-2xl"></i>
+                        <div class="stat-icon bg-green-100">
+                            <i class="pi pi-check-circle text-green-600 text-2xl"></i>
                         </div>
                     </div>
                 </div>
 
-                <!-- Decided Cases -->
+                <!-- Dismissed Cases -->
                 <div class="stat-card">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="stat-label">Decided Cases</p>
-                            <h3 class="stat-value">{{ dashboardStats.decidedCases.toLocaleString() }}</h3>
+                            <p class="stat-label">Dismissed Cases</p>
+                            <h3 class="stat-value">{{ dashboardStats.dismissedCases.toLocaleString() }}</h3>
                         </div>
-                        <div class="stat-icon bg-green-100">
-                            <i class="pi pi-check-circle text-green-600 text-2xl"></i>
+                        <div class="stat-icon bg-red-100">
+                            <i class="pi pi-times-circle text-red-600 text-2xl"></i>
                         </div>
                     </div>
                 </div>
@@ -344,11 +354,6 @@ const getOutcomeSeverity = (outcome) => {
                             <span class="font-semibold">{{ slotProps.data.totalCases }}</span>
                         </template>
                     </Column>
-                    <Column field="pending" header="Pending" :sortable="true">
-                        <template #body="slotProps">
-                            <Tag :value="slotProps.data.pending" severity="warn"></Tag>
-                        </template>
-                    </Column>
                     <Column field="allowed" header="Allowed" :sortable="true">
                         <template #body="slotProps">
                             <Tag :value="slotProps.data.allowed" severity="success"></Tag>
@@ -362,11 +367,6 @@ const getOutcomeSeverity = (outcome) => {
                     <Column field="partiallyAllowed" header="Partial" :sortable="true">
                         <template #body="slotProps">
                             <Tag :value="slotProps.data.partiallyAllowed" severity="warn"></Tag>
-                        </template>
-                    </Column>
-                    <Column field="remanded" header="Remanded" :sortable="true">
-                        <template #body="slotProps">
-                            <Tag :value="slotProps.data.remanded" severity="info"></Tag>
                         </template>
                     </Column>
                     <Column field="avgResolutionDays" header="Avg Days" :sortable="true">
@@ -398,6 +398,18 @@ const getOutcomeSeverity = (outcome) => {
                     </Column>
                     <Column field="decisionDate" header="Decision Date" :sortable="true"></Column>
                     <Column field="chairperson" header="Chairperson" style="min-width: 200px;"></Column>
+                    <Column header="Actions" style="width: 100px;">
+                        <template #body="slotProps">
+                            <Button
+                                icon="pi pi-eye"
+                                severity="info"
+                                text
+                                rounded
+                                @click="viewCaseDetails(slotProps.data.id)"
+                                v-tooltip.top="'View Case Details'"
+                            />
+                        </template>
+                    </Column>
                 </DataTable>
             </div>
         </div>
@@ -516,5 +528,27 @@ h2, h3, h4 {
 /* Loading State */
 .pi-spinner {
     color: #1B365D;
+}
+
+/* Action Buttons */
+:deep(.p-button.p-button-text.p-button-rounded) {
+    transition: all 0.2s;
+}
+
+:deep(.p-button.p-button-text.p-button-rounded:hover) {
+    background-color: rgba(27, 54, 93, 0.1) !important;
+}
+
+:deep(.p-button.p-button-text.p-button-info) {
+    color: #1B365D !important;
+}
+
+:deep(.p-button.p-button-text.p-button-info:hover) {
+    color: #2A4A7C !important;
+}
+
+/* Center action buttons */
+:deep(.p-datatable .p-datatable-tbody > tr > td:last-child) {
+    text-align: center;
 }
 </style>

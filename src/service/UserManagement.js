@@ -1,15 +1,16 @@
 import { Config } from '@/utils/Config';
 import api from '@/service/Api';
 
-const USER_URL = Config.API_BASE_URL + '/users'; // Replace with your actual API base URL
+const USER_URL = Config.API_BASE_URL + '/auth/users'; // User management endpoint
 
 export const UserService = {
     /**
      * Get all Users
+     * GET /api/v1/auth/users
      * @returns {Promise} Resolves with a list of users
      */ async getUsers() {
         return await api
-            .get('/users')
+            .get('/auth/users')
             .then((response) => response.data)
             .catch((error) => {
                 console.error('Error fetching users:', error);
