@@ -20,6 +20,7 @@ const dashboardStats = ref(null);
 const casesByJudge = ref([]);
 const casesByStatus = ref(null);
 const casesByOutcome = ref(null);
+const rawOutcomeDistribution = ref(null);
 const casesByType = ref(null);
 const recentDecisions = ref([]);
 const topAppellants = ref([]);
@@ -48,8 +49,10 @@ async function loadDashboardData() {
         // Fetch all dashboard data
         dashboardStats.value = await DashboardService.getDashboardStats();
         casesByJudge.value = await DashboardService.getCasesByJudge();
+        console.log('Cases by Judge Data:', casesByJudge.value);
         casesByStatus.value = await DashboardService.getCasesByStatus();
         casesByOutcome.value = await DashboardService.getCasesByOutcome();
+        rawOutcomeDistribution.value = await DashboardService.getRawOutcomeDistribution();
         casesByType.value = await DashboardService.getCasesByType();
         recentDecisions.value = await DashboardService.getRecentDecisions();
 
@@ -74,36 +77,33 @@ async function loadDashboardData() {
 }
 
 function setupStatusChart() {
+    // Group into 2 categories: Allowed (includes partial) and Disallowed (dismissed + remanded)
+    const allowedTotal = (casesByOutcome.value.allowed || 0) + (casesByOutcome.value.partially_allowed || 0);
+    const disallowedTotal = (casesByOutcome.value.dismissed || 0) + (casesByOutcome.value.remanded || 0);
+
     statusChartData.value = {
-        labels: ['Pending', 'Decided', 'Appealed', 'Withdrawn', 'Settled'],
+        labels: ['Allowed', 'Disallowed'],
         datasets: [
             {
-                data: [
-                    casesByStatus.value.pending,
-                    casesByStatus.value.decided,
-                    casesByStatus.value.appealed,
-                    casesByStatus.value.withdrawn,
-                    casesByStatus.value.settled
-                ],
-                backgroundColor: ['#F59E0B', '#10B981', '#6366F1', '#64748B', '#8B5CF6'],
-                hoverBackgroundColor: ['#FBBF24', '#34D399', '#818CF8', '#94A3B8', '#A78BFA']
+                data: [allowedTotal, disallowedTotal],
+                backgroundColor: ['#10B981', '#EF4444'],
+                hoverBackgroundColor: ['#34D399', '#F87171']
             }
         ]
     };
 }
 
 function setupOutcomeChart() {
+    // Use raw outcome distribution for dynamic grouping
+    const outcomes = Object.keys(rawOutcomeDistribution.value || {});
+    const counts = Object.values(rawOutcomeDistribution.value || {});
+
     outcomeChartData.value = {
-        labels: ['Allowed', 'Dismissed', 'Partially Allowed', 'Remanded'],
+        labels: outcomes,
         datasets: [
             {
                 label: 'Number of Cases',
-                data: [
-                    casesByOutcome.value.allowed,
-                    casesByOutcome.value.dismissed,
-                    casesByOutcome.value.partially_allowed,
-                    casesByOutcome.value.remanded
-                ],
+                data: counts,
                 backgroundColor: '#1B365D',
                 borderColor: '#1B365D',
                 borderWidth: 1,
@@ -355,14 +355,14 @@ const getWinRateColor = (rate) => {
         <div v-else>
             <!-- Top Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <!-- Total Cases -->
+                <!-- Total Decision -->
                 <div
                     class="stat-card"
-                    v-tooltip.top="'All cases in the TRAB repository'"
+                    v-tooltip.top="'All decisions in the TRAB repository'"
                 >
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="stat-label">Total Cases</p>
+                            <p class="stat-label">Total Decision</p>
                             <h3 class="stat-value">{{ dashboardStats.totalCases.toLocaleString() }}</h3>
                             <p class="stat-trend">
                                 <i class="pi pi-chart-line"></i>
@@ -486,9 +486,9 @@ const getWinRateColor = (rate) => {
                     </DataTable>
                 </div>
 
-                <!-- Cases by Status Chart (Right) -->
+                <!-- Cases by General Outcome Chart (Right) -->
                 <div class="card">
-                    <h3 class="card-title mb-4">Cases by Status</h3>
+                    <h3 class="card-title mb-4">Cases by General Outcome</h3>
                     <div style="height: 450px; width: 100%;">
                         <Chart type="pie" :data="statusChartData" :options="pieChartOptions" />
                     </div>
@@ -533,19 +533,14 @@ const getWinRateColor = (rate) => {
                             <span class="font-semibold">{{ slotProps.data.totalCases }}</span>
                         </template>
                     </Column>
-                    <Column field="allowed" header="Allowed" :sortable="true">
+                    <Column header="Allowed" :sortable="true">
                         <template #body="slotProps">
-                            <Tag :value="slotProps.data.allowed" severity="success"></Tag>
+                            <Tag :value="(slotProps.data.allowed || 0) + (slotProps.data.partiallyAllowed || 0)" severity="success"></Tag>
                         </template>
                     </Column>
-                    <Column field="dismissed" header="Dismissed" :sortable="true">
+                    <Column header="Dismissed" :sortable="true">
                         <template #body="slotProps">
-                            <Tag :value="slotProps.data.dismissed" severity="danger"></Tag>
-                        </template>
-                    </Column>
-                    <Column field="partiallyAllowed" header="Partial" :sortable="true">
-                        <template #body="slotProps">
-                            <Tag :value="slotProps.data.partiallyAllowed" severity="warn"></Tag>
+                            <Tag :value="(slotProps.data.dismissed || 0) + (slotProps.data.remanded || 0)" severity="danger"></Tag>
                         </template>
                     </Column>
                     <Column field="avgResolutionDays" header="Avg Days" :sortable="true">

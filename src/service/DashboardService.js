@@ -41,14 +41,16 @@ class DashboardService {
                 };
 
                 cases.forEach(caseItem => {
-                    const outcome = (caseItem.outcome || '').toLowerCase().replace(/\s+/g, '_');
-                    if (outcome === 'allowed') {
+                    const outcome = (caseItem.outcome || '').toLowerCase().trim();
+
+                    // Check for various outcome formats
+                    if (outcome.includes('allowed') && !outcome.includes('partial') && !outcome.includes('dismiss')) {
                         outcomes.allowed++;
-                    } else if (outcome === 'dismissed') {
+                    } else if (outcome.includes('dismiss')) {
                         outcomes.dismissed++;
-                    } else if (outcome === 'partially_allowed' || outcome === 'partial') {
+                    } else if (outcome.includes('partial')) {
                         outcomes.partially_allowed++;
-                    } else if (outcome === 'remanded') {
+                    } else if (outcome.includes('remand')) {
                         outcomes.remanded++;
                     }
                 });
@@ -195,15 +197,17 @@ class DashboardService {
                 data.decided++;
             }
 
-            // Count by outcome
-            const outcome = (caseItem.outcome || '').toLowerCase();
-            if (outcome === 'allowed') {
+            // Count by outcome - handle various formats
+            const outcome = (caseItem.outcome || '').toLowerCase().trim();
+
+            // Check for various outcome formats
+            if (outcome.includes('allowed') && !outcome.includes('partial') && !outcome.includes('dismiss')) {
                 data.allowed++;
-            } else if (outcome === 'dismissed') {
+            } else if (outcome.includes('dismiss')) {
                 data.dismissed++;
-            } else if (outcome === 'partially_allowed' || outcome === 'partially allowed') {
+            } else if (outcome.includes('partial')) {
                 data.partiallyAllowed++;
-            } else if (outcome === 'remanded') {
+            } else if (outcome.includes('remand')) {
                 data.remanded++;
             }
 
@@ -358,6 +362,41 @@ class DashboardService {
     }
 
     /**
+     * Get raw outcome distribution (dynamic grouping by actual outcome values)
+     * Returns object with actual outcome strings as keys and counts as values
+     */
+    async getRawOutcomeDistribution() {
+        try {
+            const response = await axios.get(API_URL, {
+                params: { limit: 10000 }
+            });
+
+            const cases = response.data.cases || response.data;
+            if (!Array.isArray(cases)) {
+                return {};
+            }
+
+            const outcomeCounts = {};
+
+            cases.forEach(caseItem => {
+                // Get the raw outcome value, trim whitespace
+                const outcome = (caseItem.outcome || 'Unknown').trim();
+
+                if (outcomeCounts[outcome]) {
+                    outcomeCounts[outcome]++;
+                } else {
+                    outcomeCounts[outcome] = 1;
+                }
+            });
+
+            return outcomeCounts;
+        } catch (error) {
+            console.error('Error fetching raw outcome distribution:', error);
+            return {};
+        }
+    }
+
+    /**
      * Aggregate case outcomes from actual case data
      */
     async aggregateCasesByOutcome() {
@@ -388,15 +427,16 @@ class DashboardService {
             };
 
             cases.forEach(caseItem => {
-                const outcome = (caseItem.outcome || '').toLowerCase().replace(/\s+/g, '_');
+                const outcome = (caseItem.outcome || '').toLowerCase().trim();
 
-                if (outcome === 'allowed') {
+                // Check for various outcome formats
+                if (outcome.includes('allowed') && !outcome.includes('partial') && !outcome.includes('dismiss')) {
                     outcomes.allowed++;
-                } else if (outcome === 'dismissed') {
+                } else if (outcome.includes('dismiss')) {
                     outcomes.dismissed++;
-                } else if (outcome === 'partially_allowed' || outcome === 'partial') {
+                } else if (outcome.includes('partial')) {
                     outcomes.partially_allowed++;
-                } else if (outcome === 'remanded') {
+                } else if (outcome.includes('remand')) {
                     outcomes.remanded++;
                 }
             });
