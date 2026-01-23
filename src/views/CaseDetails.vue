@@ -35,6 +35,14 @@
                     />
                     <div class="header-actions">
                         <Button
+                            icon="pi pi-search"
+                            label="Similar Cases"
+                            @click="findSimilarCases"
+                            outlined
+                            severity="success"
+                            v-tooltip.top="'Find cases similar to this one'"
+                        />
+                        <Button
                             icon="pi pi-copy"
                             label="Copy Citation"
                             @click="copyCitation"
@@ -623,6 +631,61 @@ function shareCase() {
             detail: 'Could not copy URL to clipboard',
             life: 3000
         });
+    });
+}
+
+function findSimilarCases() {
+    if (!caseData.value) return;
+
+    // Build intelligent search query from case metadata
+    const searchTerms = [];
+
+    // Add case type as primary search term
+    if (caseData.value.caseType) {
+        searchTerms.push(caseData.value.caseType.replace('_', ' '));
+    }
+
+    // Add key issues if available
+    if (caseData.value.keyIssues && caseData.value.keyIssues.length > 0) {
+        // Take first 2 key issues
+        searchTerms.push(...caseData.value.keyIssues.slice(0, 2));
+    }
+
+    // Add legal principles if available
+    if (caseData.value.legalPrinciples && caseData.value.legalPrinciples.length > 0) {
+        // Take first legal principle
+        searchTerms.push(caseData.value.legalPrinciples[0]);
+    }
+
+    // If no specific terms, use summary or outcome
+    if (searchTerms.length === 0) {
+        if (caseData.value.summary) {
+            // Extract key phrases from summary (first 50 chars)
+            searchTerms.push(caseData.value.summary.substring(0, 50));
+        } else if (caseData.value.outcome) {
+            searchTerms.push(caseData.value.caseType || '');
+            searchTerms.push(caseData.value.outcome);
+        }
+    }
+
+    // Build search query
+    const searchQuery = searchTerms.join(' ').trim();
+
+    // Navigate to search page with pre-filled query and filters
+    router.push({
+        name: 'SearchCases',
+        query: {
+            q: searchQuery,
+            taxType: caseData.value.caseType,
+            outcome: caseData.value.outcome
+        }
+    });
+
+    toast.add({
+        severity: 'info',
+        summary: 'Finding Similar Cases',
+        detail: 'Searching for cases with similar characteristics...',
+        life: 3000
     });
 }
 

@@ -3,22 +3,80 @@
         <div class="card">
             <h2 class="text-3xl font-bold mb-6">Case Repository Search</h2>
 
-            <!-- Search Input -->
+            <!-- Quick Filter Chips -->
+            <div class="quick-filters-section mb-4">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="quick-filters-label">Quick Searches:</span>
+                    <Chip
+                        v-for="quickFilter in quickFilters"
+                        :key="quickFilter.id"
+                        :label="quickFilter.label"
+                        :icon="quickFilter.icon"
+                        class="quick-filter-chip"
+                        @click="applyQuickFilter(quickFilter)"
+                    />
+                </div>
+            </div>
+
+            <!-- Search Input with History -->
             <div class="search-container mb-4">
                 <div class="flex gap-3">
-                    <div class="flex-1">
+                    <div class="flex-1 relative">
                         <InputText
                             v-model="searchQuery"
                             placeholder="Search cases... (e.g., 'customs excise', 'limitation period')"
                             class="w-full"
                             @keyup.enter="performSearch"
+                            @focus="showSearchHistory = true"
                         />
+                        <!-- Search History Dropdown -->
+                        <div v-if="showSearchHistory && searchHistory.length > 0" class="search-history-dropdown">
+                            <div class="search-history-header">
+                                <span class="text-xs font-bold text-gray-600 uppercase">Recent Searches</span>
+                                <Button
+                                    icon="pi pi-trash"
+                                    text
+                                    rounded
+                                    size="small"
+                                    severity="danger"
+                                    @click="clearSearchHistory"
+                                    v-tooltip.top="'Clear History'"
+                                />
+                            </div>
+                            <div class="search-history-items">
+                                <div
+                                    v-for="(historyItem, index) in searchHistory.slice(0, 8)"
+                                    :key="index"
+                                    class="search-history-item"
+                                    @click="loadSearchFromHistory(historyItem)"
+                                >
+                                    <div class="flex items-center gap-2 flex-1">
+                                        <i class="pi pi-history text-gray-400"></i>
+                                        <div class="flex-1">
+                                            <p class="font-semibold text-sm">{{ historyItem.query }}</p>
+                                            <p class="text-xs text-gray-500">
+                                                {{ historyItem.searchType }} • {{ historyItem.resultCount }} results • {{ formatHistoryDate(historyItem.timestamp) }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <i class="pi pi-arrow-right text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <Button
                         label="Search"
                         icon="pi pi-search"
                         @click="performSearch"
                         :loading="loading"
+                    />
+                    <Button
+                        icon="pi pi-clock"
+                        outlined
+                        @click="toggleHistoryPanel"
+                        v-tooltip.top="'View Search History'"
+                        :badge="searchHistory.length > 0 ? searchHistory.length.toString() : null"
+                        badgeSeverity="info"
                     />
                 </div>
             </div>
@@ -285,9 +343,21 @@
                                 </div>
                             </div>
 
-                            <!-- Content Snippet -->
-                            <div class="content-snippet p-3 bg-gray-50 rounded">
-                                <p class="text-sm" v-html="highlightText(result.content)"></p>
+                            <!-- Content Snippet with Enhanced Highlighting -->
+                            <div class="content-snippet-container">
+                                <div class="content-snippet-header">
+                                    <span class="snippet-label">
+                                        <i class="pi pi-file-edit"></i>
+                                        Text Match (Page {{ result.pageNumber }})
+                                    </span>
+                                    <span v-if="getMatchCount(result.content) > 0" class="match-count">
+                                        <i class="pi pi-search"></i>
+                                        {{ getMatchCount(result.content) }} match{{ getMatchCount(result.content) > 1 ? 'es' : '' }}
+                                    </span>
+                                </div>
+                                <div class="content-snippet p-3 bg-gray-50 rounded">
+                                    <div class="text-sm content-text" v-html="highlightText(result.content)"></div>
+                                </div>
                             </div>
 
                             <!-- Board Members -->
@@ -398,11 +468,76 @@ export default {
                 { label: 'Other', value: 'other' }
             ],
             chairpersons: [],
-            loadingChairpersons: false
+            loadingChairpersons: false,
+            searchHistory: [],
+            showSearchHistory: false,
+            showHistoryPanel: false,
+            quickFilters: [
+                {
+                    id: 'high-value',
+                    label: 'High Value Cases (>50M)',
+                    icon: 'pi pi-money-bill',
+                    query: 'tax liability assessment',
+                    filters: { minAmountDisputed: 50000000 }
+                },
+                {
+                    id: 'allowed-cases',
+                    label: 'Allowed Appeals',
+                    icon: 'pi pi-check-circle',
+                    query: 'appeal allowed',
+                    filters: { outcome: 'allowed' }
+                },
+                {
+                    id: 'vat-cases',
+                    label: 'VAT Cases',
+                    icon: 'pi pi-percentage',
+                    query: 'value added tax VAT',
+                    filters: { taxType: 'vat' }
+                },
+                {
+                    id: 'customs-cases',
+                    label: 'Customs Cases',
+                    icon: 'pi pi-globe',
+                    query: 'customs duty import export',
+                    filters: { taxType: 'customs' }
+                },
+                {
+                    id: 'limitation-period',
+                    label: 'Limitation Period',
+                    icon: 'pi pi-clock',
+                    query: 'limitation period time barred statute of limitations',
+                    filters: {}
+                },
+                {
+                    id: 'procedural-issues',
+                    label: 'Procedural Issues',
+                    icon: 'pi pi-list',
+                    query: 'procedure notice service jurisdiction',
+                    filters: {}
+                },
+                {
+                    id: 'recent-decisions',
+                    label: 'Recent Decisions (2024)',
+                    icon: 'pi pi-calendar',
+                    query: 'decision',
+                    filters: {
+                        decisionDateFrom: new Date('2024-01-01'),
+                        decisionDateTo: new Date('2024-12-31')
+                    }
+                }
+            ]
         };
     },
     mounted() {
         this.loadChairpersons();
+        this.loadSearchHistory();
+        // Close search history dropdown when clicking outside
+        document.addEventListener('click', this.handleClickOutside);
+        // Check for query parameters from similar cases navigation
+        this.loadFromQueryParams();
+    },
+    beforeUnmount() {
+        document.removeEventListener('click', this.handleClickOutside);
     },
     computed: {
         activeFiltersCount() {
@@ -504,10 +639,13 @@ export default {
                         break;
                 }
                 this.searchResults = results;
+                // Save to search history
+                this.saveToSearchHistory(this.searchQuery, this.searchType, results.totalResults);
             } catch (error) {
                 this.errorMessage = error.response?.data?.message || 'An error occurred while searching';
             } finally {
                 this.loading = false;
+                this.showSearchHistory = false;
             }
         },
         getStatusSeverity(status) {
@@ -550,18 +688,92 @@ export default {
         highlightText(content) {
             if (!this.searchQuery || !content) return content;
 
+            try {
+                // Split search query into individual words
+                const searchTerms = this.searchQuery.trim().split(/\s+/);
+
+                // Expand search terms to include variations (singular/plural, with/without 's')
+                const expandedTerms = [];
+                searchTerms.forEach(term => {
+                    // Escape special regex chars
+                    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                    // Add the original term
+                    expandedTerms.push(escapedTerm);
+
+                    // Add variations for common word endings
+                    // If term ends with 's', add version without 's'
+                    if (term.toLowerCase().endsWith('s') && term.length > 2) {
+                        expandedTerms.push(escapedTerm.slice(0, -1));
+                    } else {
+                        // If term doesn't end with 's', add version with 's'
+                        expandedTerms.push(escapedTerm + 's?'); // Optional 's'
+                    }
+
+                    // Add variations for -ed, -ing endings
+                    if (term.length > 3) {
+                        const base = escapedTerm.replace(/e?d$/i, '').replace(/ing$/i, '');
+                        if (base !== escapedTerm) {
+                            expandedTerms.push(base + '(s|ed|ing)?');
+                        }
+                    }
+                });
+
+                // Create a regex pattern that matches any of the search terms and variations
+                const pattern = [...new Set(expandedTerms)].join('|');
+                const regex = new RegExp(`\\b(${pattern})\\b`, 'gi');
+
+                // Debug logging
+                if (content.toLowerCase().includes('appeal')) {
+                    console.log('Highlighting debug:', {
+                        searchQuery: this.searchQuery,
+                        pattern: pattern,
+                        contentPreview: content.substring(0, 100),
+                        matches: content.match(regex)
+                    });
+                }
+
+                // Replace matched terms with highlighted version with animation and inline styles
+                // Using bright yellow-orange background with dark text for maximum visibility
+                const highlighted = content.replace(regex, '<span class="highlight animate-pulse-highlight" style="background: #FFEB3B; background-image: linear-gradient(135deg, #FFEB3B 0%, #FFC107 100%); color: #000000; font-weight: 900; padding: 3px 6px; border-radius: 4px; border: 2px solid #FF9800; box-shadow: 0 0 8px rgba(255, 152, 0, 0.4);">$1</span>');
+                return highlighted;
+            } catch (error) {
+                console.error('Highlighting error:', error);
+                return content;
+            }
+        },
+        getMatchCount(content) {
+            if (!this.searchQuery || !content) return 0;
+
             // Split search query into individual words
             const searchTerms = this.searchQuery.trim().split(/\s+/);
 
-            // Create a regex pattern that matches any of the search terms (case-insensitive)
-            const pattern = searchTerms
-                .map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) // Escape special regex chars
-                .join('|');
+            // Expand search terms to include variations (same logic as highlightText)
+            const expandedTerms = [];
+            searchTerms.forEach(term => {
+                const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                expandedTerms.push(escapedTerm);
 
-            const regex = new RegExp(`(${pattern})`, 'gi');
+                if (term.toLowerCase().endsWith('s') && term.length > 2) {
+                    expandedTerms.push(escapedTerm.slice(0, -1));
+                } else {
+                    expandedTerms.push(escapedTerm + 's?');
+                }
 
-            // Replace matched terms with highlighted version
-            return content.replace(regex, '<span class="highlight">$1</span>');
+                if (term.length > 3) {
+                    const base = escapedTerm.replace(/e?d$/i, '').replace(/ing$/i, '');
+                    if (base !== escapedTerm) {
+                        expandedTerms.push(base + '(s|ed|ing)?');
+                    }
+                }
+            });
+
+            const pattern = [...new Set(expandedTerms)].join('|');
+            const regex = new RegExp(`\\b(${pattern})\\b`, 'gi');
+
+            // Count all matches
+            const matches = content.match(regex);
+            return matches ? matches.length : 0;
         },
         applyFilters() {
             // Filters are applied automatically via the filteredResults computed property
@@ -719,6 +931,145 @@ export default {
                 detail: `Exported ${this.filteredResults.results.length} results to CSV`,
                 life: 3000
             });
+        },
+        // Search History Methods
+        loadSearchHistory() {
+            try {
+                const history = localStorage.getItem('trab_search_history');
+                if (history) {
+                    this.searchHistory = JSON.parse(history);
+                }
+            } catch (error) {
+                console.error('Error loading search history:', error);
+                this.searchHistory = [];
+            }
+        },
+        saveToSearchHistory(query, searchType, resultCount) {
+            try {
+                // Check if this exact query already exists
+                const existingIndex = this.searchHistory.findIndex(
+                    item => item.query.toLowerCase() === query.toLowerCase() && item.searchType === searchType
+                );
+
+                const historyItem = {
+                    query,
+                    searchType,
+                    resultCount,
+                    timestamp: new Date().toISOString()
+                };
+
+                // If exists, remove it (we'll add it to the top)
+                if (existingIndex !== -1) {
+                    this.searchHistory.splice(existingIndex, 1);
+                }
+
+                // Add to beginning of array
+                this.searchHistory.unshift(historyItem);
+
+                // Keep only last 50 searches
+                if (this.searchHistory.length > 50) {
+                    this.searchHistory = this.searchHistory.slice(0, 50);
+                }
+
+                // Save to localStorage
+                localStorage.setItem('trab_search_history', JSON.stringify(this.searchHistory));
+            } catch (error) {
+                console.error('Error saving search history:', error);
+            }
+        },
+        loadSearchFromHistory(historyItem) {
+            this.searchQuery = historyItem.query;
+            this.searchType = historyItem.searchType;
+            this.showSearchHistory = false;
+            this.performSearch();
+        },
+        clearSearchHistory() {
+            this.searchHistory = [];
+            localStorage.removeItem('trab_search_history');
+            this.showSearchHistory = false;
+            this.$toast?.add({
+                severity: 'success',
+                summary: 'History Cleared',
+                detail: 'Search history has been cleared',
+                life: 2000
+            });
+        },
+        toggleHistoryPanel() {
+            this.showHistoryPanel = !this.showHistoryPanel;
+        },
+        formatHistoryDate(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return date.toLocaleDateString();
+        },
+        handleClickOutside(event) {
+            const searchContainer = this.$el.querySelector('.search-container');
+            if (searchContainer && !searchContainer.contains(event.target)) {
+                this.showSearchHistory = false;
+            }
+        },
+        loadFromQueryParams() {
+            // Load search parameters from URL (e.g., from "Find Similar Cases")
+            const urlParams = this.$route.query;
+
+            if (urlParams.q) {
+                this.searchQuery = urlParams.q;
+
+                // Apply filters if provided
+                if (urlParams.taxType) {
+                    this.filters.taxType = urlParams.taxType;
+                }
+                if (urlParams.outcome) {
+                    this.filters.outcome = urlParams.outcome;
+                }
+                if (urlParams.chairperson) {
+                    this.filters.chairperson = urlParams.chairperson;
+                }
+
+                // Auto-run search if query is present
+                this.$nextTick(() => {
+                    this.performSearch();
+                    if (this.filters.taxType || this.filters.outcome || this.filters.chairperson) {
+                        this.showAdvancedFilters = true;
+                    }
+                });
+            }
+        },
+        applyQuickFilter(quickFilter) {
+            // Apply the pre-configured search query
+            this.searchQuery = quickFilter.query;
+
+            // Apply associated filters
+            if (quickFilter.filters) {
+                Object.keys(quickFilter.filters).forEach(key => {
+                    this.filters[key] = quickFilter.filters[key];
+                });
+            }
+
+            // Show advanced filters if any filters were applied
+            if (Object.keys(quickFilter.filters).length > 0) {
+                this.showAdvancedFilters = true;
+            }
+
+            // Execute the search
+            this.performSearch();
+
+            // Show toast notification
+            this.$toast?.add({
+                severity: 'info',
+                summary: 'Quick Filter Applied',
+                detail: `Searching for: ${quickFilter.label}`,
+                life: 2000
+            });
         }
     }
 };
@@ -862,18 +1213,114 @@ export default {
     color: #4F46E5 !important;
 }
 
-.content-snippet {
-    max-height: 150px;
-    overflow-y: auto;
+/* Content Snippet with Enhanced Highlighting */
+.content-snippet-container {
+    margin-top: 1rem;
+    border: 1px solid #E2E8F0;
     border-radius: 2px;
+    overflow: hidden;
 }
 
-.highlight {
-    background-color: #FEF08A;
-    color: #854D0E;
+.content-snippet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.625rem 0.875rem;
+    background: linear-gradient(135deg, #1B365D 0%, #2A4A7C 100%);
+    color: #FFFFFF;
+    font-size: 0.8125rem;
+}
+
+.snippet-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+}
+
+.snippet-label i {
+    color: #D4AF37;
+}
+
+.match-count {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: rgba(212, 175, 55, 0.2);
+    padding: 0.25rem 0.625rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
     font-weight: 700;
-    padding: 2px 4px;
-    border-radius: 2px;
+}
+
+.match-count i {
+    color: #D4AF37;
+    font-size: 0.7rem;
+}
+
+.content-snippet {
+    max-height: 180px;
+    overflow-y: auto;
+    border-radius: 0;
+    line-height: 1.6;
+}
+
+.content-snippet::-webkit-scrollbar {
+    width: 6px;
+}
+
+.content-snippet::-webkit-scrollbar-track {
+    background: #F1F5F9;
+}
+
+.content-snippet::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 3px;
+}
+
+.content-snippet::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+}
+
+.content-text {
+    color: #334155;
+    word-wrap: break-word;
+}
+
+/* Force highlight styles with maximum specificity */
+.content-snippet .content-text .highlight,
+.content-text .highlight,
+span.highlight {
+    background: #FFEB3B !important;
+    background-image: linear-gradient(135deg, #FFEB3B 0%, #FFC107 100%) !important;
+    color: #000000 !important;
+    font-weight: 900 !important;
+    padding: 3px 6px !important;
+    border-radius: 4px !important;
+    box-shadow: 0 0 8px rgba(255, 152, 0, 0.4) !important;
+    border: 2px solid #FF9800 !important;
+    position: relative !important;
+    display: inline !important;
+    text-decoration: none !important;
+}
+
+.content-snippet .content-text .animate-pulse-highlight,
+.content-text .animate-pulse-highlight,
+span.animate-pulse-highlight {
+    animation: pulse-highlight 2s ease-in-out !important;
+}
+
+@keyframes pulse-highlight {
+    0%, 100% {
+        box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(234, 179, 8, 0.4);
+    }
+}
+
+.animate-pulse-highlight {
+    animation: pulse-highlight 2s ease-in-out;
 }
 
 /* Headers */
@@ -952,5 +1399,112 @@ label {
 
 .outcome-tag i {
     font-size: 1rem;
+}
+
+/* Search History Dropdown */
+.search-history-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 0.5rem;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 2px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.search-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #E2E8F0;
+    background-color: #F8FAFC;
+}
+
+.search-history-items {
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.search-history-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #F1F5F9;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.search-history-item:hover {
+    background-color: #F8FAFC;
+    border-left: 3px solid #1B365D;
+}
+
+.search-history-item:last-child {
+    border-bottom: none;
+}
+
+.search-history-item i.pi-history {
+    font-size: 1.25rem;
+}
+
+.search-history-item i.pi-arrow-right {
+    font-size: 0.875rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.search-history-item:hover i.pi-arrow-right {
+    opacity: 1;
+}
+
+/* Quick Filter Chips */
+.quick-filters-section {
+    background: #F8FAFC;
+    padding: 1rem 1.25rem;
+    border-radius: 2px;
+    border: 1px solid #E2E8F0;
+}
+
+.quick-filters-label {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.quick-filter-chip {
+    cursor: pointer !important;
+    transition: all 0.2s;
+    background: #FFFFFF !important;
+    border: 1px solid #CBD5E1 !important;
+    padding: 0.5rem 0.875rem !important;
+    font-weight: 600 !important;
+    font-size: 0.8125rem !important;
+    color: #1B365D !important;
+}
+
+.quick-filter-chip:hover {
+    background: #1B365D !important;
+    color: #FFFFFF !important;
+    border-color: #1B365D !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(27, 54, 93, 0.15);
+}
+
+.quick-filter-chip :deep(.p-chip-icon) {
+    color: #1B365D;
+    margin-right: 0.5rem;
+}
+
+.quick-filter-chip:hover :deep(.p-chip-icon) {
+    color: #D4AF37;
 }
 </style>
