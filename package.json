@@ -21,6 +21,7 @@
         "primeicons": "^6.0.1",
         "primevue": "^4.0.0",
         "qrcode.vue": "^3.6.0",
+        "sweetalert2": "^11.26.17",
         "to-words": "^3.7.0",
         "v-mask": "^2.3.0",
         "vue": "^3.4.34",

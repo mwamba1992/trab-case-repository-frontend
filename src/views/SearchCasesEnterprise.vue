@@ -219,10 +219,6 @@
                                         <h3 class="text-lg font-bold text-gov-navy mb-1">{{ result.caseMetadata.caseNumber }}</h3>
                                         <p class="text-sm text-gray-600">{{ result.documentName }} • {{ t('page') }} {{ result.pageNumber }}</p>
                                     </div>
-                                    <div class="flex gap-2">
-                                        <div class="gov-badge-score">{{ t('score') }}: {{ result.score.toFixed(3) }}</div>
-                                        <div class="gov-badge">{{ result.matchType }}</div>
-                                    </div>
                                 </div>
                             </div>
                         </div>

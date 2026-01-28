@@ -112,14 +112,14 @@
                             <div class="info-grid">
                                 <div class="info-item">
                                     <label class="info-label">Appellant</label>
-                                    <p class="info-value">{{ caseData.appellant || 'N/A' }}</p>
+                                    <p class="info-value party-name">{{ caseData.appellant || 'N/A' }}</p>
                                     <small v-if="caseData.appellantTin" class="info-meta">
                                         TIN: {{ caseData.appellantTin }}
                                     </small>
                                 </div>
                                 <div class="info-item">
                                     <label class="info-label">Respondent</label>
-                                    <p class="info-value">{{ caseData.respondent || 'N/A' }}</p>
+                                    <p class="info-value party-name">{{ caseData.respondent || 'N/A' }}</p>
                                 </div>
                             </div>
                         </template>
@@ -168,7 +168,7 @@
                                         <i class="pi pi-star-fill"></i>
                                     </div>
                                     <div class="member-info">
-                                        <span class="member-name">{{ caseData.chairperson }}</span>
+                                        <span class="member-name chairperson-name">{{ caseData.chairperson }}</span>
                                         <span class="member-role">Chairperson</span>
                                     </div>
                                 </div>
@@ -849,6 +849,8 @@ onMounted(() => {
     color: #1B365D;
     margin-bottom: 1rem;
     line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
 }
 
 .case-tags {
@@ -971,6 +973,11 @@ onMounted(() => {
     line-height: 1.4;
 }
 
+.info-value.party-name {
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
 .info-meta {
     color: #94A3B8;
     font-size: 0.8125rem;
@@ -1076,6 +1083,11 @@ onMounted(() => {
     font-weight: 600;
     color: #1B365D;
     font-size: 0.875rem;
+}
+
+.member-name.chairperson-name {
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
 }
 
 .member-role {

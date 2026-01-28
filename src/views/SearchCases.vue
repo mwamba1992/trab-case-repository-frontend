@@ -274,7 +274,6 @@
                         </h3>
                     </div>
                     <div class="flex gap-2 items-center">
-                        <Tag :value="filteredResults.searchType" severity="info" />
                         <Button
                             icon="pi pi-file-excel"
                             label="Export to Excel"
@@ -304,10 +303,6 @@
                                 <div>
                                     <h4 class="text-lg font-bold">{{ result.caseMetadata.caseNumber }}</h4>
                                     <p class="text-sm text-gray-600">{{ result.documentName }} - Page {{ result.pageNumber }}</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <Tag :value="`Score: ${result.score.toFixed(3)}`" severity="success" />
-                                    <Tag :value="result.matchType" />
                                 </div>
                             </div>
                         </template>

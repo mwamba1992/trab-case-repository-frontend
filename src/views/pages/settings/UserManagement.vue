@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue';
 import { FilterMatchMode } from '@primevue/core/api';
 import { UserService } from '@/service/UserManagement';
 import AuthService from '@/service/AuthService';
+import Swal from 'sweetalert2';
 
 const user = ref({});
 const toast = useToast();
@@ -71,7 +72,100 @@ function editUser(usr) {
     userDialog.value = true;
 }
 
-function deleteUser(usr) {}
+function deleteUser(usr) {
+    Swal.fire({
+        title: 'Delete User?',
+        html: `
+            <div style="text-align: left; padding: 0.5rem 0;">
+                <p style="margin-bottom: 1rem; color: #64748B;">You are about to delete the following user:</p>
+                <div style="background: #F8FAFC; padding: 1rem; border-radius: 8px; border: 1px solid #E2E8F0;">
+                    <p style="margin: 0 0 0.5rem 0;"><strong>Name:</strong> ${usr.firstName} ${usr.lastName}</p>
+                    <p style="margin: 0 0 0.5rem 0;"><strong>Email:</strong> ${usr.email}</p>
+                    <p style="margin: 0;"><strong>Role:</strong> ${usr.role}</p>
+                </div>
+                <p style="margin-top: 1rem; color: #DC2626; font-size: 0.875rem;">
+                    <i class="pi pi-exclamation-triangle" style="margin-right: 0.5rem;"></i>
+                    This action cannot be undone.
+                </p>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#DC2626',
+        cancelButtonColor: '#64748B',
+        confirmButtonText: 'Yes, Delete User',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true,
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            confirmButton: 'swal-confirm-btn',
+            cancelButton: 'swal-cancel-btn'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading state
+            Swal.fire({
+                title: 'Deleting User...',
+                html: 'Please wait while we remove the user.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            UserService.deleteUser(usr.id)
+                .then(() => {
+                    // Remove user from local array
+                    users.value = users.value.filter((u) => u.id !== usr.id);
+
+                    Swal.fire({
+                        title: 'Deleted!',
+                        text: `${usr.firstName} ${usr.lastName} has been removed from the system.`,
+                        icon: 'success',
+                        confirmButtonColor: '#1B365D',
+                        customClass: {
+                            popup: 'swal-custom-popup',
+                            title: 'swal-custom-title'
+                        }
+                    });
+
+                    toast.add({
+                        severity: 'success',
+                        summary: 'User Deleted',
+                        detail: `${usr.firstName} ${usr.lastName} was successfully deleted`,
+                        life: 3000
+                    });
+                })
+                .catch((error) => {
+                    console.error('Delete error:', error);
+                    const errorMessage = error.response?.data?.message ||
+                                        error.response?.data?.error ||
+                                        'Failed to delete user. Please try again.';
+
+                    Swal.fire({
+                        title: 'Error!',
+                        text: errorMessage,
+                        icon: 'error',
+                        confirmButtonColor: '#1B365D',
+                        customClass: {
+                            popup: 'swal-custom-popup',
+                            title: 'swal-custom-title'
+                        }
+                    });
+
+                    toast.add({
+                        severity: 'error',
+                        summary: 'Delete Failed',
+                        detail: errorMessage,
+                        life: 3000
+                    });
+                });
+        }
+    });
+}
 
 function resetPassword(user) {
     console.log(user);
@@ -246,12 +340,12 @@ function saveUser() {
 <template>
     <Toolbar class="mb-6">
         <template #start>
-            <Button label="New" icon="pi pi-plus" severity="secondary" class="mr-2" @click="openNew" />
-            <Button label="Change Password" icon="pi pi-key" severity="secondary" @click="openChangePassword" />
+            <Button label="New" icon="pi pi-plus" class="mr-2 toolbar-btn-primary" @click="openNew" />
+            <Button label="Change Password" icon="pi pi-key" outlined class="toolbar-btn-outlined" @click="openChangePassword" />
         </template>
 
         <template #end>
-            <Button label="Export" icon="pi pi-upload" severity="secondary" @click="exportCSV($event)" />
+            <Button label="Export" icon="pi pi-download" outlined class="toolbar-btn-outlined" @click="exportCSV($event)" />
         </template>
     </Toolbar>
 
@@ -263,6 +357,7 @@ function saveUser() {
         :paginator="true"
         :rows="10"
         :filters="filters"
+        stripedRows
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         :rowsPerPageOptions="[5, 10, 25]"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} users"
@@ -545,27 +640,125 @@ function saveUser() {
     </Dialog>
 
     <!-- Change Password Dialog -->
-    <Dialog v-model:visible="changePasswordDialog" :style="{ width: '500px' }" header="Change Password" :modal="true">
-        <div class="flex flex-col gap-6">
-            <div>
-                <label for="currentPassword" class="block font-bold mb-3">Current Password</label>
-                <Password id="currentPassword" v-model="passwordData.currentPassword" :feedback="false" :toggleMask="true" fluid />
+    <Dialog v-model:visible="changePasswordDialog" :style="{ width: '500px' }" :modal="true" :dismissableMask="true" class="password-dialog">
+        <template #header>
+            <div class="dialog-header-content">
+                <div class="header-icon">
+                    <i class="pi pi-lock"></i>
+                </div>
+                <div class="header-text">
+                    <h3>Change Password</h3>
+                    <p>Update your account password</p>
+                </div>
+            </div>
+        </template>
+
+        <div class="password-form">
+            <!-- Security Notice -->
+            <div class="security-notice">
+                <i class="pi pi-shield"></i>
+                <span>For your security, please enter your current password to verify your identity.</span>
             </div>
 
-            <div>
-                <label for="newPassword" class="block font-bold mb-3">New Password</label>
-                <Password id="newPassword" v-model="passwordData.newPassword" :toggleMask="true" fluid />
+            <!-- Current Password Field -->
+            <div class="form-field">
+                <label for="currentPassword" class="field-label">
+                    Current Password <span class="required-asterisk">*</span>
+                </label>
+                <div class="password-input-wrapper">
+                    <i class="pi pi-lock input-icon-left"></i>
+                    <Password
+                        id="currentPassword"
+                        v-model="passwordData.currentPassword"
+                        :feedback="false"
+                        :toggleMask="true"
+                        placeholder="Enter current password"
+                        class="password-input-field"
+                        inputClass="with-left-icon"
+                    />
+                </div>
             </div>
 
-            <div>
-                <label for="confirmPassword" class="block font-bold mb-3">Confirm New Password</label>
-                <Password id="confirmPassword" v-model="passwordData.confirmPassword" :feedback="false" :toggleMask="true" fluid />
+            <div class="password-divider">
+                <span>New Password</span>
+            </div>
+
+            <!-- New Password Field -->
+            <div class="form-field">
+                <label for="newPassword" class="field-label">
+                    New Password <span class="required-asterisk">*</span>
+                </label>
+                <div class="password-input-wrapper">
+                    <i class="pi pi-key input-icon-left"></i>
+                    <Password
+                        id="newPassword"
+                        v-model="passwordData.newPassword"
+                        :toggleMask="true"
+                        placeholder="Enter new password"
+                        class="password-input-field"
+                        inputClass="with-left-icon"
+                    >
+                        <template #header>
+                            <h6 class="password-meter-header">Password Strength</h6>
+                        </template>
+                        <template #footer>
+                            <div class="password-requirements">
+                                <p class="requirement-title">Password must contain:</p>
+                                <ul class="requirements-list">
+                                    <li :class="{ 'met': passwordData.newPassword && passwordData.newPassword.length >= 6 }">
+                                        <i :class="passwordData.newPassword && passwordData.newPassword.length >= 6 ? 'pi pi-check-circle' : 'pi pi-circle'"></i>
+                                        At least 6 characters
+                                    </li>
+                                </ul>
+                            </div>
+                        </template>
+                    </Password>
+                </div>
+            </div>
+
+            <!-- Confirm Password Field -->
+            <div class="form-field">
+                <label for="confirmPassword" class="field-label">
+                    Confirm New Password <span class="required-asterisk">*</span>
+                </label>
+                <div class="password-input-wrapper">
+                    <i class="pi pi-check-circle input-icon-left"></i>
+                    <Password
+                        id="confirmPassword"
+                        v-model="passwordData.confirmPassword"
+                        :feedback="false"
+                        :toggleMask="true"
+                        placeholder="Confirm new password"
+                        class="password-input-field"
+                        inputClass="with-left-icon"
+                    />
+                </div>
+                <small v-if="passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword" class="error-message">
+                    <i class="pi pi-exclamation-circle"></i> Passwords do not match
+                </small>
+                <small v-else-if="passwordData.confirmPassword && passwordData.newPassword === passwordData.confirmPassword" class="success-message">
+                    <i class="pi pi-check-circle"></i> Passwords match
+                </small>
             </div>
         </div>
 
         <template #footer>
-            <Button label="Cancel" icon="pi pi-times" text @click="hidePasswordDialog" />
-            <Button label="Change Password" icon="pi pi-check" @click="handleChangePassword" />
+            <div class="dialog-footer">
+                <Button
+                    label="Cancel"
+                    icon="pi pi-times"
+                    severity="secondary"
+                    text
+                    @click="hidePasswordDialog"
+                    class="footer-button cancel-button"
+                />
+                <Button
+                    label="Update Password"
+                    icon="pi pi-check"
+                    @click="handleChangePassword"
+                    class="footer-button save-button"
+                />
+            </div>
         </template>
     </Dialog>
 </template>
@@ -1239,5 +1432,218 @@ label {
     .header-text p {
         font-size: 0.8125rem;
     }
+}
+
+/* Toolbar Button Styling */
+:deep(.toolbar-btn-primary) {
+    background: #1B365D !important;
+    border-color: #1B365D !important;
+    color: #FFFFFF !important;
+}
+
+:deep(.toolbar-btn-primary:hover) {
+    background: #0F2642 !important;
+    border-color: #0F2642 !important;
+}
+
+:deep(.toolbar-btn-outlined) {
+    background: transparent !important;
+    border: 1.5px solid #1B365D !important;
+    color: #1B365D !important;
+}
+
+:deep(.toolbar-btn-outlined:hover) {
+    background: rgba(27, 54, 93, 0.08) !important;
+    border-color: #0F2642 !important;
+    color: #0F2642 !important;
+}
+
+/* ========================================
+   CHANGE PASSWORD DIALOG STYLING
+   ======================================== */
+
+/* Password Dialog Overrides */
+:deep(.password-dialog .p-dialog-header) {
+    background: linear-gradient(to bottom, #FFFFFF 0%, #F8FAFC 100%);
+    border-bottom: 2px solid #E2E8F0;
+    padding: 1.75rem 2rem;
+}
+
+:deep(.password-dialog .p-dialog-content) {
+    padding: 2rem;
+    background: #FFFFFF;
+}
+
+:deep(.password-dialog .p-dialog-footer) {
+    background: linear-gradient(to top, #FFFFFF 0%, #F8FAFC 100%);
+    border-top: 2px solid #E2E8F0;
+    padding: 1.5rem 2rem;
+}
+
+/* Password Form */
+.password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Security Notice */
+.security-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+    border: 1px solid #C7D2FE;
+    border-radius: 8px;
+    color: #3730A3;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.security-notice i {
+    font-size: 1.25rem;
+    color: #4F46E5;
+    margin-top: 0.125rem;
+    flex-shrink: 0;
+}
+
+/* Password Divider */
+.password-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.5rem 0;
+}
+
+.password-divider::before,
+.password-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #E2E8F0;
+}
+
+.password-divider span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748B;
+}
+
+/* Password Input Wrapper */
+.password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-wrapper .input-icon-left {
+    position: absolute;
+    left: 0.875rem;
+    color: #6B7280;
+    font-size: 1rem;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Password Input Field Styling */
+:deep(.password-input-field) {
+    width: 100%;
+}
+
+:deep(.password-input-field .p-password-input) {
+    width: 100%;
+    height: 2.75rem;
+    padding: 0 3rem 0 2.75rem;
+    border: 1.5px solid #D1D5DB;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    background: #FFFFFF;
+}
+
+:deep(.password-input-field .p-password-input:hover) {
+    border-color: #9CA3AF;
+}
+
+:deep(.password-input-field .p-password-input:focus) {
+    border-color: #1B365D;
+    border-width: 2px;
+    box-shadow: 0 0 0 3px rgba(27, 54, 93, 0.1);
+}
+
+:deep(.password-input-field .p-password-input::placeholder) {
+    color: #9CA3AF;
+}
+
+/* Success Message */
+.success-message {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.375rem;
+    color: #059669;
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.success-message i {
+    font-size: 0.875rem;
+}
+</style>
+
+<style>
+/* SweetAlert Custom Styling - Must be unscoped for global effect */
+.swal-custom-popup {
+    border-radius: 12px !important;
+    font-family: inherit !important;
+}
+
+.swal-custom-title {
+    color: #1B365D !important;
+    font-weight: 700 !important;
+}
+
+.swal-confirm-btn {
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+}
+
+.swal-cancel-btn {
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+}
+
+.swal2-icon.swal2-warning {
+    border-color: #F59E0B !important;
+    color: #F59E0B !important;
+}
+
+.swal2-icon.swal2-success {
+    border-color: #059669 !important;
+    color: #059669 !important;
+}
+
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success .swal2-success-line-long {
+    background-color: #059669 !important;
+}
+
+.swal2-icon.swal2-success .swal2-success-ring {
+    border-color: rgba(5, 150, 105, 0.3) !important;
+}
+
+.swal2-icon.swal2-error {
+    border-color: #DC2626 !important;
+    color: #DC2626 !important;
+}
+
+.swal2-icon.swal2-error .swal2-x-mark-line-left,
+.swal2-icon.swal2-error .swal2-x-mark-line-right {
+    background-color: #DC2626 !important;
 }
 </style>

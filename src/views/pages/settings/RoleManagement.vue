@@ -147,13 +147,14 @@ function deleteSelectedRole() {
         :paginator="true"
         :rows="10"
         :filters="filters"
+        stripedRows
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         :rowsPerPageOptions="[5, 10, 25]"
-        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} judges"
+        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} roles"
     >
         <template #header>
             <div class="flex flex-wrap gap-2 items-center justify-between">
-                <h4 class="m-0">Manage Judges</h4>
+                <h4 class="m-0">Manage Roles</h4>
                 <IconField>
                     <InputIcon>
                         <i class="pi pi-search" />
@@ -164,9 +165,9 @@ function deleteSelectedRole() {
         </template>
 
         <Column selectionMode="multiple" style="width: 3rem" :exportable="false"></Column>
-        <Column field="name" header="User Name" sortable style="min-width: 12rem"></Column>
-        <Column field="desc" header="Check Number" sortable style="min-width: 16rem"></Column>
-        <Column header="Permissions">
+        <Column field="name" header="Role Name" sortable style="min-width: 12rem"></Column>
+        <Column field="desc" header="Description" sortable style="min-width: 16rem"></Column>
+        <Column header="Permissions" style="min-width: 20rem">
             <template #body="slotProps">
                 <!-- Loop through the roleList of each user and display the roles -->
                 <div>
